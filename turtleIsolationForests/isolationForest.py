@@ -1,44 +1,40 @@
-from heapq import nsmallest
 import math
+import numpy as np
 import pandas as pd
 import random
 
 class IsolationForest:
 
     def __init__(self,
-                 contamination,                     #if integer, the number of expected anomalies. If float [0,1], the proportion of expected anomalies.
+                 contamination = 'auto',            #if integer, the number of expected anomalies. If float [0,1], the proportion of expected anomalies.
                  num_trees = 100,                   #default forest size as presented in original paper.
                  subsample_size = 256,              #default subsample size as presented in original paper.
                  random_state = None):
         self.contamination = contamination
         self.subsample_size = subsample_size
-        self.max_depth = math.log2(subsample_size)  #Maximum tree depth. After this depth, which is the average depth of all points, by definition points are not anomalous.
+        self.max_depth = math.floor(math.log2(subsample_size))  #Maximum tree depth. After this depth, the average depth of all points, by definition points are not anomalous.
         self.num_trees = num_trees
         self.random_state = random_state
-        self.forest = list()
+        self.c = c(subsample_size)
     
-    def advance_random_state(self):                 #have to change random_state to get different trees.
+    def _advance_random_state(self):                #have to change random_state to get different trees.
         if self.random_state is not None:           #but do so in a way that preserves replicability
             self.random_state *= 31                 #this is just multiply by a small prime, mod a bigger prime
             self.random_state %= 104729
     
-    def random_subsample(self, dataframe):
-        self.advance_random_state()
+    def _random_subsample(self, dataframe):
+        self._advance_random_state()
         return dataframe.sample(n = self.subsample_size,
                                 replace = False,
                                 weights = None,
                                 random_state = self.random_state)
     
-    def random_point(self, sample_data):
-        self.advance_random_state()
-        return sample_data.sample(n = 1, random_state = self.random_state).iloc[0]
-    
     def fit(self, train_data):                      #the whole dataset, as a dataframe, processed and suitable for training
-        self.forest = [self.fit_tree(self.random_subsample(train_data)) for i in range(self.num_trees)]
-        self.threshold = self.calculate_anomaly_score_threshold(train_data)
+        self.forest = [self._make_tree(self._random_subsample(train_data)) for i in range(self.num_trees)]
+        self.threshold = self._calculate_anomaly_score_threshold(train_data)
 
-    def fit_tree(self, sample_data):
-        point_to_isolate = self.random_point(sample_data)
+    def _make_tree(self, sample_data):
+        point_to_isolate = self._random_point(sample_data)
         root = IsolationTree(sample_data)
         tree_pointer = root
         depth = 0
@@ -51,66 +47,62 @@ class IsolationForest:
             depth += 1
         return root
     
-    def calculate_anomaly_score_threshold(self, train_data):
-        training_predictions = self.calculate_anomaly_scores(train_data)        #this takes aaaaages. how is sklearn doing it so fast, and do it during fit or predict?
-        contamination = self.normalize_contamination(train_data)
-        threshold_index = round(contamination * len(train_data))
-        if contamination <= 0.2:
-            threshold = nsmallest(threshold_index, training_predictions)[threshold_index]
+    def _random_point(self, sample_data):
+        self._advance_random_state()
+        return sample_data.sample(n = 1, random_state = self.random_state).iloc[0]
+    
+    def _calculate_anomaly_score_threshold(self, train_data):
+        if self.contamination == 'auto':
+            return 0.5
         else:
-            threshold = sorted(training_predictions)[threshold_index]
-        return threshold
+            percentile_contamination = 100 * self._adapt_contamination(train_data)
+            return np.percentile(self._calculate_anomaly_scores(train_data), 100 - percentile_contamination)        
+                                                            #this takes aaaaages. how is sklearn doing it so fast, and is it during fit or predict?
+                                                            #It's during fit
+                                                            #I bet it's parallelism through cython
+    
+    def _adapt_contamination(self, data):       #accept int contaminations, but work internally only with float contaminations in [0,1]
+        if self.contamination == 'auto':
+            return 0.5
+        elif self.contamination is int:
+            return self.contamination / len(data)
+        else:
+            return min(1.0, max(0.0, self.contamination))
 
-    def predict(self, X_test):
-        predictions = pd.DataFrame(index=X_test.index)
-        predictions['anomaly_score'] = self.calculate_anomaly_scores(X_test)
+    def predict(self, data):
+        predictions = self._score(data)
         predictions['predicted_as_anomaly'] = predictions['anomaly_score'] > self.threshold
         return predictions
     
-    def calculate_anomaly_scores(self, data):
+    def _score(self, data):
+        scoreframe = pd.DataFrame(index=data.index)
+        scoreframe['anomaly_score'] = self._calculate_anomaly_scores(data)
+        return scoreframe
+    
+    def _calculate_anomaly_scores(self, data):
         self.len_data = len(data)
-        anomaly_scores = data.apply(self.calculate_anomaly_score, axis=1, result_type='reduce')
+        anomaly_scores = data.apply(self._calculate_anomaly_score, axis=1, result_type='reduce')
         del self.len_data
         return anomaly_scores
     
-    def calculate_anomaly_score(self, point):
+    def _calculate_anomaly_score(self, point):
         running_total = 0
         count = 0
         for tree in self.forest:
             running_total += tree.path_length(point)
             count += 1
         path_length = running_total / count
-        return 2 ** (-1 * path_length / c(self.len_data))
-    
-    def normalize_contamination(self, data):        #accept int contaminations, but work internally only with float contaminations in [0,1]
-        if self.contamination is int:
-            return self.contamination / len(data)
-        else:
-            return min(1.0, max(0.0, self.contamination))
-        
+                                                #Equation 2 from original Isolation Forest paper
+        return 2 ** (-1 * path_length / self.c)        
 
 class IsolationTree:
 
-    def __init__(self,
-                 data,
-                 parent = None):
+    def __init__(self, data):
         self.data = data                            #the data at this node, before decision if interior node.
         self.size = len(data)                       #the amount of data at this node, cached to reduce prediction calculations
-        self.parent = None                          #parent Isolation Tree.
         self.left = None                            #left child Isolation Tree.
         self.right = None                           #right child Isolation Tree.
-        self.decision = None                        #if interior node, the decision function, if leaf, None.
-        
-    def split(self):
-        attribute = random.sample(list(self.data.columns), 1)[0]
-        lower_bound = self.data[attribute].min()
-        upper_bound = self.data[attribute].max()
-        split_value = random.uniform(lower_bound, upper_bound)
-        self.decision = Decision(attribute, split_value)
-        left_data = self.data[self.data[attribute] < split_value]
-        right_data = self.data[self.data[attribute] >= split_value]
-        self.left = IsolationTree(left_data, parent = self)
-        self.right = IsolationTree(right_data, parent = self)
+        self.decision = None                        #if interior node, the decision function (set by split), if leaf, None.
     
     def path_length(self, point):
         tree_pointer = self
@@ -121,7 +113,21 @@ class IsolationTree:
                 tree_pointer = tree_pointer.left
             else:
                 tree_pointer = tree_pointer.right
-        return path_length + c(tree_pointer.size) #As in IF paper, returned path length is adjusted up by c(|tree_data|)
+        return path_length + c(tree_pointer.size)   #As in IF paper, returned path length is adjusted up by c(|tree_data|) at the terminal node
+        
+    def split(self):
+        self.decision = self._decide_split()
+        left_data = self.data[self.data[self.decision.attribute] < self.decision.value]
+        right_data = self.data[self.data[self.decision.attribute] >= self.decision.value]
+        self.left = IsolationTree(left_data)
+        self.right = IsolationTree(right_data)
+    
+    def _decide_split(self):
+        attribute = random.sample(list(self.data.columns), 1)[0]
+        lower_bound = self.data[attribute].min()
+        upper_bound = self.data[attribute].max()
+        split_value = random.uniform(lower_bound, upper_bound)
+        return Decision(attribute, split_value)
 
 class Decision:
 
@@ -132,7 +138,7 @@ class Decision:
     def go_left(self, point_of_interest):
         return (point_of_interest[self.attribute] < self.value)
 
-def c(n):                                           #c(n) as defined in Isolation Forest Paper is the average path length
+def c(n):                                           #c(n) as defined in Isolation Forest Paper (2012) is the average path length
                                                     #of an unsuccessful BST search and is used to normalize anomaly scores
     if n > 2:
         return 2 * harmonic_number(n - 1) - (2 * (n-1) / n)
@@ -141,7 +147,7 @@ def c(n):                                           #c(n) as defined in Isolatio
     else:
         return 0
     
-def harmonic_number(n):                             #this is an approximation that is valid for large n
+def harmonic_number(n):                             #this is an approximation
     #Euler-Mascheroni constant                      #see https://en.wikipedia.org/wiki/Harmonic_number
     gamma = 0.5772156649015328606065120900824024310421
     return math.log(n) + gamma
