@@ -1,23 +1,20 @@
 from turtleIsolationForests.isolationForest import IsolationForest, IsolationTree
 import numpy as np
+from numpy.random import default_rng
 import pandas as pd
 import random
+import typing
 
-class ExtendedIsolationForest(IsolationForest):
+rng = default_rng()
 
-    def _make_tree(self, sample_data):
-        point_to_isolate = self._random_point(sample_data)
-        root = ExtendedIsolationTree(sample_data)
-        tree_pointer = root
-        depth = 0
-        while (depth < self.max_depth and len(tree_pointer.data) > 1):
-            tree_pointer.split()
-            if (tree_pointer.decision.go_left(point_to_isolate)):
-                tree_pointer = tree_pointer.left
-            else:
-                tree_pointer = tree_pointer.right
-            depth += 1
-        return root
+class MultivariateDecision:
+
+    def __init__(self, vector: np.ndarray[np.float64], intercept: np.ndarray[np.float64]):
+        self.weights = vector
+        self.bias = -1 * np.dot(vector, intercept)
+    
+    def go_left(self, point_of_interest: pd.Series) -> bool:
+        return (np.dot(np.array(point_of_interest), np.array(self.weights)) + self.bias) < 0
 
 class ExtendedIsolationTree(IsolationTree):
     
@@ -31,25 +28,35 @@ class ExtendedIsolationTree(IsolationTree):
         self.right = IsolationTree(right_data)
 
     #override
-    def _decide_split(self):
+    def _decide_split(self) -> MultivariateDecision:
         return MultivariateDecision(self._random_vector_on_unit_sphere(), self._random_intercept())
 
-    def _random_vector_on_unit_sphere(self): #note to self, EIF authors say this is an even dist of slopes ... but wouldn't that be an exponential distribution?
-        return [random.gauss(mu = 0.0, sigma = 1.0) for _ in list(self.data.columns)]
+    def _random_vector_on_unit_sphere(self) -> np.ndarray[np.float64]: #note to self, EIF authors say this is an even dist of slopes ... but wouldn't that be an exponential distribution?
+        #return [random.gauss(mu = 0.0, sigma = 1.0) for _ in list(self.data.columns)]
+        #Can I do this in numpy and avoid the conversion later?
+        return rng.standard_normal(len(self.data.columns))
     
-    def _random_intercept(self):
-        return [self._random_bounded_attribute_value(attribute) for attribute in list(self.data.columns)]
+    def _random_intercept(self) -> np.ndarray[np.float64]:
+        #return [self._random_bounded_attribute_value(attribute) for attribute in list(self.data.columns)]
+        return rng.uniform(low=self.data.apply(min), high=self.data.apply(max))
     
-    def _random_bounded_attribute_value(self, attribute):
+    def _random_bounded_attribute_value(self, attribute: str) -> float:
         lower_bound = self.data[attribute].min()
         upper_bound = self.data[attribute].max()
         return random.uniform(lower_bound, upper_bound)
 
-class MultivariateDecision:
+class ExtendedIsolationForest(IsolationForest):
 
-    def __init__(self, vector, intercept):
-        self.weights = np.array(vector)
-        self.bias = -1 * np.dot(np.array(intercept), self.weights)
-    
-    def go_left(self, point_of_interest):
-        return (np.dot(np.array(point_of_interest), np.array(self.weights)) + self.bias) < 0
+    def _make_tree(self, sample_data: pd.DataFrame) -> ExtendedIsolationTree:
+        point_to_isolate = self._random_point(sample_data)
+        root = ExtendedIsolationTree(sample_data)
+        tree_pointer = root
+        depth = 0
+        while (depth < self.max_depth and len(tree_pointer.data) > 1):
+            tree_pointer.split()
+            if (tree_pointer.decision.go_left(point_to_isolate)):
+                tree_pointer = tree_pointer.left
+            else:
+                tree_pointer = tree_pointer.right
+            depth += 1
+        return root
