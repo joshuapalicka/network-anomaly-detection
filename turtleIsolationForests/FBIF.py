@@ -9,17 +9,18 @@ import typing
 c1 = 1.0
 c2 = 1.0 #These constants affect radius selection of HypersphereDecisions
 
-def euclidean_distance(point1: np.ndarray, point2: np.ndarray) -> np.float64:
-    return np.linalg.norm(point1 - point2, ord=2)
+def euclidean_distance_sq(point1: np.ndarray, point2: np.ndarray) -> np.float64:
+    diff = point1 - point2
+    return np.dot(diff, diff)
 
 class HypersphereDecision:
 
     def __init__(self, center: np.ndarray[np.float64], radius: np.ndarray[np.float64]):
         self.center = center
-        self.radius = radius
+        self.radiusSq = radius * radius
     
     def go_left(self, point_of_interest: pd.Series) -> bool:
-        return euclidean_distance(np.array(point_of_interest), self.center) <= self.radius
+        return euclidean_distance_sq(np.array(point_of_interest), self.center) <= self.radiusSq
 
 class FBIsolationTree(IsolationTree):
     
