@@ -12,7 +12,7 @@ class Projection:
         self.hyperplane = hyperplane
     
     def project_onto_hyperplane(self, vector: pd.Series) -> np.float64:
-        # WHAT IN BLAZES DO THE AUTHORS MEAN BY PROJECTING A VECTOR ONTO A HYPERPLANE AND ENDING UP WITH A REAL
+        # WHAT DO THE AUTHORS MEAN BY PROJECTING A VECTOR ONTO A HYPERPLANE AND ENDING UP WITH A REAL
 
         # this is the vector result of vector projection onto the hyperplane
         # projected = vector - (np.dot(vector, self.hyperplane.weights) / np.dot(self.hyperplane.weights, self.hyperplane.weights) * self.hyperplane.weights)
@@ -32,13 +32,16 @@ class SCIsolationTree(IsolationTree):
         return (self.decision.left_data, self.decision.right_data)
     
     #SCiForest generates multiple hyperplanes and chooses the best
-    #They have a method for generating hyperplanes in their paper,
-    #but I have chosen to borrow the hyperplanes from EIF, as they seem both simpler and better to me.
+    #They have a method for generating hyperplanes in their paper that does not require scaling in preprocessing
+    #But since we will scale, I am borrowing code from EIF. They are otherwise the same.
     def _decide_split(self, num_hyperplanes: int) -> MultivariateDecision:
         hyperplane = MultivariateDecision(self._random_vector_on_unit_sphere(), self._random_intercept())
         num_hyperplanes -= 1
         while num_hyperplanes > 0:
             next_hyperplane = MultivariateDecision(self._random_vector_on_unit_sphere(), self._random_intercept())
+            # currently generating random intercept
+            # paper generates only random coeffs and tests every possible point as intercept
+            # cites one-pass solution for stdev calculation in Knuth book.
             hyperplane = self._better_hyperplane(hyperplane, next_hyperplane)
             num_hyperplanes -= 1
         return hyperplane
@@ -58,7 +61,7 @@ class SCIsolationTree(IsolationTree):
         projected_data = self.data.apply(projection.project_onto_hyperplane, axis=1, result_type='reduce') # a series
         projected_left = projected_data.loc[left_indices]                                                  # filtered series
         projected_right = projected_data.loc[~left_indices]                                                # filtered series
-        sigma_y = np.std(projected_data) #requires testing to confirm projected_data is 1xN
+        sigma_y = np.std(projected_data)
         sigma_yl = np.std(projected_left)
         sigma_yr = np.std(projected_right)
         sigma_avg = (sigma_yl + sigma_yr) / 2
@@ -97,7 +100,7 @@ class SCIsolationForest(IsolationForest):
     #The paper also doesn't use max_depth to truncate tree growth, but I have added it in for consistency with the IsolationForest base
     def _make_tree(self, sample_data: pd.DataFrame, depth: int = 0) -> SCIsolationTree:
         tree = SCIsolationTree(sample_data)
-        if len(sample_data > 2) and depth < self.max_depth:
+        if len(sample_data) > 2 and depth < self.max_depth:
             (left_data, right_data) = tree.split(self.num_hyperplanes_per_split)
             tree.left = self._make_tree(left_data, depth + 1)
             tree.right = self._make_tree(right_data, depth + 1)
