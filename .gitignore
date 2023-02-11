@@ -1,4 +1,7 @@
 data/
 ServerMachineDataset/
+SU_Data/
 
 *.pyc
+
+*.jpg
