@@ -1,3 +1,4 @@
+from turtleIsolationForests.optimizeThreshold import optimize_threshold
 import math
 import numpy as np
 import pandas as pd
@@ -73,9 +74,9 @@ class IsolationForest:
                                 weights = None,
                                 random_state = self.random_state)
     
-    def fit(self, train_data: pd.DataFrame) -> None:                      #the whole dataset, as a dataframe, processed and suitable for training
+    def fit(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> None:
         self.forest = [self._make_tree(self._random_subsample(train_data)) for i in range(self.num_trees)]
-        self.threshold = self._calculate_anomaly_score_threshold(train_data)
+        self.threshold = self._calculate_anomaly_score_threshold(train_data, train_labels)
 
     def _make_tree(self, sample_data: pd.DataFrame) -> IsolationTree:
         point_to_isolate = self._random_point(sample_data)
@@ -95,15 +96,18 @@ class IsolationForest:
         self._advance_random_state()
         return sample_data.sample(n = 1, random_state = self.random_state).iloc[0]
     
-    def _calculate_anomaly_score_threshold(self, train_data: pd.DataFrame) -> float:
+    def _calculate_anomaly_score_threshold(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> float:
+        train_scores = self._score(train_data)
         if self.contamination == 'auto':
-            return 0.5
+            train_scores['is_normal'] = train_labels
+            train_scores.sort_values('anomaly_score', inplace=True, ignore_index=True)
+            return optimize_threshold(train_scores)
         else:
             percentile_contamination = 100 * self._adapt_contamination(train_data)
-            return np.percentile(self._calculate_anomaly_scores(train_data), 100 - percentile_contamination)        
-                                                            #this takes aaaaages. how is sklearn doing it so fast, and is it during fit or predict?
-                                                            #It's during fit
-                                                            #I bet it's parallelism through cython
+            return np.percentile(train_scores, 100 - percentile_contamination)        
+                                                #this takes aaaaages. how is sklearn doing it so fast, and is it during fit or predict?
+                                                #It's during fit
+                                                #I bet it's parallelism through cython
     
     def _adapt_contamination(self, data: pd.DataFrame) -> float:       #accept int contaminations, but work internally only with float contaminations in [0,1]
         if self.contamination == 'auto':
