@@ -88,12 +88,7 @@ class SCIsolationForest(IsolationForest):
                  num_trees = 100,                   #default forest size as presented in original paper.
                  subsample_size = 256,              #default subsample size as presented in original paper.
                  random_state = None):
-        self.contamination = contamination
-        self.subsample_size = subsample_size
-        self.max_depth = math.floor(math.log2(subsample_size))  #Maximum tree depth. After this depth, the average depth of all points, by definition points are not anomalous.
-        self.num_trees = num_trees
-        self.random_state = random_state
-        self.c = c(subsample_size)
+        super().__init__(contamination, num_trees, subsample_size, random_state)
         self.num_hyperplanes_per_split = num_hyperplanes_per_split
 
     #SCIsolationForest splits fully, rather than isolating a random point.
