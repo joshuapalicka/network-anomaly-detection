@@ -40,25 +40,27 @@ class FBIsolationTree(IsolationTree):
         # paper center
         #center = rng.uniform(low=min_bounds, high=max_bounds)
         
-        # the paper selects a center from the range of values, but I judge this biases the hyperspheres to center in hypercubic space and risks a sphere containing no data
-        # Testing out using a random point as center - result is forest takes 3x as long to build, 30sec instead of 10sec, but radii ranges seem smaller.
-        # further result: massive improvement in scores. Up to more reasonable ~.6 f1, from ~.3
+        # the paper selects a center from the range of values, but I judge this biases the hyperspheres to center uniformly 
+        # in hypercubic space and risks a sphere containing no data
+        # Testing out using a random point as center - result is forest takes 3x as long to build, 30sec instead of 10sec,
+        # but has massive improvement in scores. Up to more reasonable ~.6 f1, from ~.3
         center = self.data.sample(1, axis=0).to_numpy()[0]
 
         minVal = center - min_bounds
-        #print('minVal: ###############################################\n' + str(minVal))
         maxVal = max_bounds - center
-        #print('maxVal: ###############################################\n' + str(maxVal))
-        #print('combine with min: #####################################\n' + str(maxVal.combine(minVal, min)))
+
+        # best guess at paper's poorly-explained rMin and rMax. Produces rMin of zero at every decision
         #rMin = self.c1 * min(maxVal.combine(minVal, min))
+        #rMax = self.c2 * max(maxVal.combine(minVal, max))
+
+        # New rMin, rMax norms the combined bounds rather than min/maxing them. This has superior scores.
         rMin = self.c1 * np.linalg.norm(maxVal.combine(minVal, min), ord=2)
         rMax = self.c2 * np.linalg.norm(maxVal.combine(minVal, max), ord=2)
-        #if rMin != 0:
-        #    print(rMin)
-        #rMax = self.c2 * max(maxVal.combine(minVal, max))
-        radius = rng.uniform(low=rMin, high=rMax) ######## FIXME Find out why c2=0.75 causes min>max crash error
-        #print("Picked random hypersphere radius " + str(radius) + " between " + str(rMin) + " and " + str(rMax))
-        
+        # Note: even small opposing changes in c1, c2 like 1.1,0.9 cause crash failures when rMin and rMax would be very close to each other
+        # i.e. when the decision data contains few, close points. I also don't see much point in lowering c1 or increasing c2.
+        # Possibly I have automated c1,c2 tuning by introducing the normed rMin, rMax calculation.
+ 
+        radius = rng.uniform(low=rMin, high=rMax)
         return HypersphereDecision(center, radius)
 
 class FBIsolationForest(IsolationForest):
