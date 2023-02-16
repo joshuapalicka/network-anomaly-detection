@@ -76,7 +76,9 @@ class IsolationForest:
     
     def fit(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> None:
         self.forest = [self._make_tree(self._random_subsample(train_data)) for i in range(self.num_trees)]
+        print("Finished building forest")
         self.threshold = self._calculate_anomaly_score_threshold(train_data, train_labels)
+        print("Finished calculating threshold")
 
     def _make_tree(self, sample_data: pd.DataFrame) -> IsolationTree:
         point_to_isolate = self._random_point(sample_data)
@@ -110,12 +112,12 @@ class IsolationForest:
                                                 #I bet it's parallelism through cython
     
     def _adapt_contamination(self, data: pd.DataFrame) -> float:       #accept int contaminations, but work internally only with float contaminations in [0,1]
-        if self.contamination == 'auto':
-            return 0.5
+        if self.contamination is float:
+            return min(1.0, max(0.0, self.contamination))
         elif self.contamination is int:
             return self.contamination / len(data)
         else:
-            return min(1.0, max(0.0, self.contamination))
+            return 0.5
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         predictions = self._score(data)
