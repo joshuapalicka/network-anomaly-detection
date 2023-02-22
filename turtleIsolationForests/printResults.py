@@ -17,7 +17,7 @@ def print_by_result(TA: int, FA: int, FN: int, TN: int, precision: float, recall
     print("recall: " + str(recall))
     print("f1-score: " + str(f1))
 
-def return_results(predictions: DataFrame) -> (int, int, int, int, float, float, float):
+def return_results(predictions: DataFrame) -> (int, int, int, int):
     anomalies = predictions.loc[predictions['is_normal'] == 0]
     true_anomalies = anomalies.loc[predictions['predicted_as_anomaly'] == True]
     false_anomalies = anomalies.loc[predictions['predicted_as_anomaly'] == False]
