@@ -6,6 +6,9 @@ def print_results(predictions: DataFrame) -> None:
 
     precision, recall, f1 = calc_f1(TA, FA, FN, TN)
 
+    print_by_result(TA, FA, FN, TN, precision, recall, f1)
+
+def print_by_result(TA: int, FA: int, FN: int, TN: int, precision: float, recall: float, f1: float):
     print("true anomalies: " + str(TA))
     print("false anomalies: " + str(FA))
     print("false normals: " + str(FN))

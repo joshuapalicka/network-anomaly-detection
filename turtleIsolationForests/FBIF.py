@@ -54,11 +54,16 @@ class FBIsolationTree(IsolationTree):
         #rMax = self.c2 * max(maxVal.combine(minVal, max))
 
         # New rMin, rMax norms the combined bounds rather than min/maxing them. This has superior scores.
-        rMin = self.c1 * np.linalg.norm(maxVal.combine(minVal, min), ord=2)
-        rMax = self.c2 * np.linalg.norm(maxVal.combine(minVal, max), ord=2)
+        #rMin = self.c1 * np.linalg.norm(maxVal.combine(minVal, min), ord=2)
+        #rMax = self.c2 * np.linalg.norm(maxVal.combine(minVal, max), ord=2)
         # Note: even small opposing changes in c1, c2 like 1.1,0.9 cause crash failures when rMin and rMax would be very close to each other
         # i.e. when the decision data contains few, close points. I also don't see much point in lowering c1 or increasing c2.
-        # Possibly I have automated c1,c2 tuning by introducing the normed rMin, rMax calculation.
+        # Testing adaptive c1, c2 below
+        rMin = np.linalg.norm(maxVal.combine(minVal, min), ord=2)
+        rMax = np.linalg.norm(maxVal.combine(minVal, max), ord=2)
+        rInter = rMax - rMin
+        rMin += (self.c1 - 1) * rInter
+        rMax += (self.c2 - 1) * rInter
  
         radius = rng.uniform(low=rMin, high=rMax)
         return HypersphereDecision(center, radius)
