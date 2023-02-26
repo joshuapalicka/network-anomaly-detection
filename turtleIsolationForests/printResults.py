@@ -19,12 +19,12 @@ def print_by_result(TA: int, FA: int, FN: int, TN: int, precision: float, recall
 
 def return_results(predictions: DataFrame) -> (int, int, int, int):
     anomalies = predictions.loc[predictions['is_normal'] == 0]
-    true_anomalies = anomalies.loc[predictions['predicted_as_anomaly'] == True]
-    false_anomalies = anomalies.loc[predictions['predicted_as_anomaly'] == False]
-
     normals = predictions.loc[predictions['is_normal'] != 0]
-    true_normals = normals.loc[predictions['predicted_as_anomaly'] == True]
-    false_normals = normals.loc[predictions['predicted_as_anomaly'] == False]
+
+    true_anomalies = anomalies.loc[predictions['predicted_as_anomaly'] == True]
+    false_anomalies = normals.loc[predictions['predicted_as_anomaly'] == True]
+    false_normals = anomalies.loc[predictions['predicted_as_anomaly'] == False]
+    true_normals = normals.loc[predictions['predicted_as_anomaly'] == False]
 
     TA = len(true_anomalies)
     FA = len(false_anomalies)
