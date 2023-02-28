@@ -51,15 +51,17 @@ class IsolationTree:
 class IsolationForest:
 
     def __init__(self,
-                 contamination = 'auto',            #if integer, the number of expected anomalies. If float [0,1], the proportion of expected anomalies.
-                 num_trees = 100,                   #default forest size as presented in original paper.
-                 subsample_size = 256,              #default subsample size as presented in original paper.
-                 random_state = None):
+                 contamination:any = 'auto',            #if integer, the number of expected anomalies. If float [0,1], the proportion of expected anomalies.
+                 num_trees:int = 100,                   #default forest size as presented in original paper.
+                 subsample_size:int = 256,              #default subsample size as presented in original paper.
+                 random_state:int = None,
+                 verbose:bool = False):                  #when true prints out status messages
         self.contamination = contamination
         self.subsample_size = subsample_size
         self.max_depth = math.floor(math.log2(subsample_size))  #Maximum tree depth. After this depth, the average depth of all points, by definition points are not anomalous.
         self.num_trees = num_trees
         self.random_state = random_state
+        self.verbose = verbose
         self.c = c(subsample_size)
     
     def _advance_random_state(self) -> None:        #have to change random_state to get different trees.
@@ -76,9 +78,11 @@ class IsolationForest:
     
     def fit(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> None:
         self.forest = [self._make_tree(self._random_subsample(train_data)) for i in range(self.num_trees)]
-        print("Finished building forest")
+        if (self.verbose):
+            print("Finished building forest")
         self.threshold = self._calculate_anomaly_score_threshold(train_data, train_labels)
-        print("Finished calculating threshold")
+        if (self.verbose):
+            print("Finished calculating threshold")
 
     def _make_tree(self, sample_data: pd.DataFrame) -> IsolationTree:
         point_to_isolate = self._random_point(sample_data)
@@ -99,17 +103,19 @@ class IsolationForest:
         return sample_data.sample(n = 1, random_state = self.random_state).iloc[0]
     
     def _calculate_anomaly_score_threshold(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> float:
-        train_scores = self._score(train_data)
+        self.train_scores = self._score(train_data)
         if self.contamination == 'auto':
-            train_scores['is_normal'] = train_labels
-            train_scores.sort_values('anomaly_score', inplace=True, ignore_index=True)
-            return optimize_threshold(train_scores)
+            self.train_scores['is_normal'] = train_labels
+            self.train_scores.sort_values('anomaly_score', inplace=True, ignore_index=True)
+            threshold = optimize_threshold(self.train_scores)   
         else:
             percentile_contamination = 100 * self._adapt_contamination(train_data)
-            return np.percentile(train_scores, 100 - percentile_contamination)        
+            threshold = np.percentile(self.train_scores, 100 - percentile_contamination)        
                                                 #this takes aaaaages. how is sklearn doing it so fast, and is it during fit or predict?
                                                 #It's during fit
                                                 #I bet it's parallelism through cython
+        self.train_scores['predicted_as_anomaly'] = self.train_scores['anomaly_score'] > threshold
+        return threshold
     
     def _adapt_contamination(self, data: pd.DataFrame) -> float:       #accept int contaminations, but work internally only with float contaminations in [0,1]
         if self.contamination is float:

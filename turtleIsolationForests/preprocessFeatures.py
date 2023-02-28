@@ -13,7 +13,6 @@ def preprocess_features(train_dataframe: pd.DataFrame, test_dataframe: pd.DataFr
     X_test = pd.DataFrame(scaler.transform(test_dataframe), columns = test_dataframe.columns)
 
     return X_train, X_test, train_labels, test_labels
-    
 
 def remove_class_columns(dataframe: pd.DataFrame) -> None:
     for column in dataframe.columns:

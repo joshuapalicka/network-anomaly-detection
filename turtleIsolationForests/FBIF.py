@@ -76,8 +76,9 @@ class FBIsolationForest(IsolationForest):
                  contamination = 'auto',            #if integer, the number of expected anomalies. If float [0,1], the proportion of expected anomalies.
                  num_trees = 100,                   #default forest size as presented in original paper.
                  subsample_size = 256,              #default subsample size as presented in original paper.
-                 random_state = None):
-        super().__init__(contamination, num_trees, subsample_size, random_state)
+                 random_state = None,
+                 verbose = False):
+        super().__init__(contamination, num_trees, subsample_size, random_state, verbose)
         self.c1 = c1
         self.c2 = c2
 
