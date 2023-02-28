@@ -27,7 +27,7 @@ def csv_printout(runs: int, X_train: DataFrame, X_test: DataFrame, train_labels:
         TA, FA, FN, TN = return_results(predictions)
         precision, recall, f1 = calc_f1(TA, FA, FN, TN)
         auroc = get_auroc_value(predictions)
-        print(str(i) + "," + str(precision) + "," + str(recall) + "," + str(f1) + ", " + str(auroc))
+        print(str(i) + "," + str(precision) + "," + str(recall) + "," + str(f1) + "," + str(auroc))
 
 def get_auroc_value(predictions: DataFrame) -> float:
     (fpr, tpr, _) = get_auroc_points(predictions)
