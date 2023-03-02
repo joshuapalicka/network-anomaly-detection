@@ -1,68 +1,54 @@
 from sklearn.metrics import roc_curve, auc
 from pandas import DataFrame
 import numpy as np
+from time import time
 import typing
 
 def notebook_visual_printout(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, model: any) -> None:
+    start_time = time()
     model.fit(X_train, train_labels)
+    fit_time = time() - start_time
+    print("Time to fit model: " + str(fit_time))
     print("Threshold: " + str(model.threshold))
     print("\nTraining set results:")
     train_predictions = model.train_scores
-    train_predictions['is_normal'] = train_labels
+    train_predictions['is_anomaly'] = 1 - train_labels
     print_results(train_predictions)
     print("auroc: " + str(get_auroc_value(train_predictions)))
-    print("\nTest set results:")
+    start_time = time()
     predictions = model.predict(X_test)
-    predictions['is_normal'] = test_labels
+    test_predict_time = time() - start_time
+    predictions['is_anomaly'] = 1 - test_labels
+    print("\nTime to predict test data: " + str(test_predict_time))
+    print("Test set results:")
     print_results(predictions)
     print("auroc: " + str(get_auroc_value(predictions)))
     print("\n")
 
 def csv_printout(runs: int, X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, model: any) -> None:
-    print("run,precision,recall,f1,auroc")
+    print("run,precision,recall,f1,auroc,test_predict_time")
     for i in range(runs):
         model.fit(X_train, train_labels)
+        start_time = time()
         predictions = model.predict(X_test)
-        predictions['is_normal'] = test_labels
+        test_predict_time = time() - start_time
+        predictions['is_anomaly'] = 1 - test_labels
         TA, FA, FN, TN = return_results(predictions)
         precision, recall, f1 = calc_f1(TA, FA, FN, TN)
         auroc = get_auroc_value(predictions)
-        print(str(i) + "," + str(precision) + "," + str(recall) + "," + str(f1) + "," + str(auroc))
+        print(str(i) + "," + str(precision) + "," + str(recall) + "," + str(f1) + "," + str(auroc) + "," + str(test_predict_time))
 
 def get_auroc_value(predictions: DataFrame) -> float:
     (fpr, tpr, _) = get_auroc_points(predictions)
     return get_auc(fpr, tpr)
 
 def get_auroc_points(predictions: DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    y_true = predictions['is_normal']
+    y_true = predictions['is_anomaly']
     y_score = predictions['anomaly_score']
-    return roc_curve(y_true, y_score, pos_label=0)
+    return roc_curve(y_true, y_score, pos_label=1)
 
 def get_auc(x: np.ndarray, y: np.ndarray) -> float:
     return auc(x, y)
-    
-def storage():
-    sorted_predictions = predictions.sort_values('anomaly_score')
-    anomalies = predictions.loc[predictions['is_normal'] == 0]
-    normals = predictions.loc[predictions['is_normal'] != 0]
-    TA = len(anomalies)
-    FA = 0
-    FN = len(normals)
-    TN = 0
-
-    aurocPoints = []
-    for i in range(len(sorted_predictions)):
-        if sorted_predictions.iloc[i]['is_normal'] == 0:
-            FA += 1
-            TA -= 1
-        else:
-            FN -= 1
-            TN += 1
-        if TN + FA != 0 and TA + FN != 0:
-            recall_tpr = TA / (TA + FN)
-            fallout_fpr = FA / (FA + TN)
-            aurocPoints.append((sorted_predictions.iloc[i]['anomaly_score'], recall_tpr, fallout_fpr))
-    return aurocPoints
 
 def print_results(predictions: DataFrame) -> None:
     TA, FA, FN, TN = return_results(predictions)
@@ -81,8 +67,8 @@ def print_by_result(TA: int, FA: int, FN: int, TN: int, precision: float, recall
     print("f1-score: " + str(f1))
 
 def return_results(predictions: DataFrame) -> (int, int, int, int):
-    anomalies = predictions.loc[predictions['is_normal'] == 0]
-    normals = predictions.loc[predictions['is_normal'] != 0]
+    anomalies = predictions.loc[predictions['is_anomaly'] == 1]
+    normals = predictions.loc[predictions['is_anomaly'] != 1]
 
     true_anomalies = anomalies.loc[predictions['predicted_as_anomaly'] == True]
     false_anomalies = normals.loc[predictions['predicted_as_anomaly'] == True]
