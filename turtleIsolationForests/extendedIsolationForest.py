@@ -11,17 +11,17 @@ class MultivariateDecision:
 
     def __init__(self, vector: np.ndarray[np.float64], intercept: np.ndarray[np.float64]):
         self.weights = vector
-        self.bias = -1 * np.dot(vector, intercept)
+        self.intercept = intercept
     
-    def go_left(self, point_of_interest: pd.Series) -> bool:
-        return (np.dot(np.array(point_of_interest), np.array(self.weights)) + self.bias) < 0
+    def go_left(self, point_of_interest: np.ndarray[np.float64]) -> bool:
+        return np.dot((point_of_interest - self.intercept), self.weights) <= 0
 
 class ExtendedIsolationTree(IsolationTree):
     
     #override
     def split(self):
         self.decision = self._decide_split()
-        left_indices = self.data.apply(self.decision.go_left, axis=1, result_type='reduce')
+        left_indices = self.data.apply(self.decision.go_left, axis=1, raw=True, result_type='reduce')
         left_data = self.data.loc[left_indices]
         right_data = self.data.loc[~left_indices]
         self.left = IsolationTree(left_data)
@@ -31,9 +31,7 @@ class ExtendedIsolationTree(IsolationTree):
     def _decide_split(self) -> MultivariateDecision:
         return MultivariateDecision(self._random_vector_on_unit_sphere(), self._random_intercept())
 
-    def _random_vector_on_unit_sphere(self) -> np.ndarray[np.float64]: #note to self, EIF authors say this is an even dist of slopes ... but wouldn't that be an exponential distribution?
-        #return [random.gauss(mu = 0.0, sigma = 1.0) for _ in list(self.data.columns)]
-        #Can I do this in numpy and avoid the conversion later?
+    def _random_vector_on_unit_sphere(self) -> np.ndarray[np.float64]:
         return rng.standard_normal(len(self.data.columns))
     
     def _random_intercept(self) -> np.ndarray[np.float64]:

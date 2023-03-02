@@ -16,8 +16,8 @@ class HypersphereDecision:
         self.center = center
         self.radiusSq = radius * radius
     
-    def go_left(self, point_of_interest: pd.Series) -> bool:
-        return euclidean_distance_sq(np.array(point_of_interest), self.center) <= self.radiusSq
+    def go_left(self, point_of_interest: np.ndarray[np.float64]) -> bool:
+        return euclidean_distance_sq(point_of_interest, self.center) <= self.radiusSq
 
 class FBIsolationTree(IsolationTree):
 
@@ -86,7 +86,7 @@ class FBIsolationForest(IsolationForest):
         tree = FBIsolationTree(sample_data, self.c1, self.c2)
         if len(sample_data) > 1 and depth < self.max_depth:
             tree.split()
-            left_indices = sample_data.apply(tree.decision.go_left, axis=1, result_type='reduce')
+            left_indices = sample_data.apply(tree.decision.go_left, axis=1, raw=True, result_type='reduce')
             left_data = sample_data.loc[left_indices]
             right_data = sample_data.loc[~left_indices]
             tree.left = self._make_tree(left_data, depth + 1)

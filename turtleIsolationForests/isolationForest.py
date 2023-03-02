@@ -1,18 +1,22 @@
 from turtleIsolationForests.optimizeThreshold import optimize_threshold
 import math
 import numpy as np
+from numpy.random import default_rng
 import pandas as pd
 import random
 import typing
 
+rng = default_rng()
+
 class Decision:
 
-    def __init__(self, attribute: list[float], value: list[float]):
+    def __init__(self, attribute: str, attribute_index: int, value: float):
         self.attribute = attribute
+        self.attribute_index = attribute_index
         self.value = value
     
-    def go_left(self, point_of_interest: pd.Series) -> bool:
-        return (point_of_interest[self.attribute] < self.value)
+    def go_left(self, point_of_interest: np.ndarray[np.float64]) -> bool:
+        return (point_of_interest[self.attribute_index] < self.value)
 
 class IsolationTree:
 
@@ -23,12 +27,13 @@ class IsolationTree:
         self.right = None                           #right child Isolation Tree.
         self.decision = None                        #if interior node, the decision function (set by split), if leaf, None.
     
-    def path_length(self, point: pd.Series) -> float:
+    def path_length(self, point: np.ndarray[np.float64]) -> float:
         tree_pointer = self
         path_length = 0
         while (tree_pointer.decision is not None):  #only leaves have None decision
             path_length += 1
-            if (tree_pointer.decision.go_left(point)):
+            left = tree_pointer.decision.go_left(point)
+            if (left):
                 tree_pointer = tree_pointer.left
             else:
                 tree_pointer = tree_pointer.right
@@ -42,11 +47,12 @@ class IsolationTree:
         self.right = IsolationTree(right_data)
     
     def _decide_split(self) -> Decision:
-        attribute = random.sample(list(self.data.columns), 1)[0]
+        attribute_index = rng.integers(len(self.data.columns))
+        attribute = self.data.columns[attribute_index]
         lower_bound = self.data[attribute].min()
         upper_bound = self.data[attribute].max()
-        split_value = random.uniform(lower_bound, upper_bound)
-        return Decision(attribute, split_value)
+        split_value = rng.uniform(lower_bound, upper_bound)
+        return Decision(attribute, attribute_index, split_value)
 
 class IsolationForest:
 
@@ -98,9 +104,9 @@ class IsolationForest:
             depth += 1
         return root
     
-    def _random_point(self, sample_data: pd.DataFrame) -> pd.Series:
+    def _random_point(self, sample_data: pd.DataFrame) -> np.ndarray[np.float64]:
         self._advance_random_state()
-        return sample_data.sample(n = 1, random_state = self.random_state).iloc[0]
+        return sample_data.sample(n = 1, random_state = self.random_state).iloc[0].to_numpy()
     
     def _calculate_anomaly_score_threshold(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> float:
         self.train_scores = self._score(train_data)
@@ -137,11 +143,11 @@ class IsolationForest:
     
     def _calculate_anomaly_scores(self, data: pd.DataFrame) -> pd.DataFrame:
         self.len_data = len(data)
-        anomaly_scores = data.apply(self._calculate_anomaly_score, axis=1, result_type='reduce')
+        anomaly_scores = data.apply(self._calculate_anomaly_score, axis=1, raw=True, result_type='reduce')
         del self.len_data
         return anomaly_scores
     
-    def _calculate_anomaly_score(self, point: pd.Series) -> float:
+    def _calculate_anomaly_score(self, point: np.ndarray[np.float64]) -> float:
         running_total = 0
         count = 0
         for tree in self.forest:
