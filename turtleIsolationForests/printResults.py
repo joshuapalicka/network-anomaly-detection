@@ -12,13 +12,11 @@ def notebook_visual_printout(X_train: DataFrame, X_test: DataFrame, train_labels
     print("Threshold: " + str(model.threshold))
     print("\nTraining set results:")
     train_predictions = model.train_scores
-    train_predictions['is_anomaly'] = 1 - train_labels
     print_results(train_predictions)
     print("auroc: " + str(get_auroc_value(train_predictions)))
     start_time = time()
-    predictions = model.predict(X_test)
+    predictions = model.predict(X_test, test_labels)
     test_predict_time = time() - start_time
-    predictions['is_anomaly'] = 1 - test_labels
     print("\nTime to predict test data: " + str(test_predict_time))
     print("Test set results:")
     print_results(predictions)
@@ -30,9 +28,8 @@ def csv_printout(runs: int, X_train: DataFrame, X_test: DataFrame, train_labels:
     for i in range(runs):
         model.fit(X_train, train_labels)
         start_time = time()
-        predictions = model.predict(X_test)
+        predictions = model.predict(X_test, test_labels)
         test_predict_time = time() - start_time
-        predictions['is_anomaly'] = 1 - test_labels
         TA, FA, FN, TN = return_results(predictions)
         precision, recall, f1 = calc_f1(TA, FA, FN, TN)
         auroc = get_auroc_value(predictions)
@@ -67,13 +64,13 @@ def print_by_result(TA: int, FA: int, FN: int, TN: int, precision: float, recall
     print("f1-score: " + str(f1))
 
 def return_results(predictions: DataFrame) -> (int, int, int, int):
-    anomalies = predictions.loc[predictions['is_anomaly'] == 1]
-    normals = predictions.loc[predictions['is_anomaly'] != 1]
+    anomalies = predictions.loc[predictions['is_anomaly']]
+    normals = predictions.loc[~predictions['is_anomaly']]
 
-    true_anomalies = anomalies.loc[predictions['predicted_as_anomaly'] == True]
-    false_anomalies = normals.loc[predictions['predicted_as_anomaly'] == True]
-    false_normals = anomalies.loc[predictions['predicted_as_anomaly'] == False]
-    true_normals = normals.loc[predictions['predicted_as_anomaly'] == False]
+    true_anomalies = anomalies.loc[predictions['predicted_as_anomaly']]
+    false_anomalies = normals.loc[predictions['predicted_as_anomaly']]
+    false_normals = anomalies.loc[~predictions['predicted_as_anomaly']]
+    true_normals = normals.loc[~predictions['predicted_as_anomaly']]
 
     TA = len(true_anomalies)
     FA = len(false_anomalies)

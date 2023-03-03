@@ -82,7 +82,7 @@ class IsolationForest:
                                 weights = None,
                                 random_state = self.random_state)
     
-    def fit(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> None:
+    def fit(self, train_data: pd.DataFrame, train_labels: pd.Series) -> None:
         self.forest = [self._make_tree(self._random_subsample(train_data)) for i in range(self.num_trees)]
         if (self.verbose):
             print("Finished building forest")
@@ -110,8 +110,8 @@ class IsolationForest:
     
     def _calculate_anomaly_score_threshold(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> float:
         self.train_scores = self._score(train_data)
+        self.train_scores['is_anomaly'] = train_labels
         if self.contamination == 'auto':
-            self.train_scores['is_normal'] = train_labels
             self.train_scores.sort_values('anomaly_score', inplace=True, ignore_index=True)
             threshold = optimize_threshold(self.train_scores)   
         else:
@@ -131,7 +131,12 @@ class IsolationForest:
         else:
             return 0.5
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def predict(self, test_data: pd.DataFrame, test_labels: pd.Series) -> pd.DataFrame:
+        predictions = self.predict_against_threshold(test_data)
+        predictions['is_anomaly'] = test_labels
+        return predictions
+    
+    def predict_against_threshold(self, test_data: pd.DataFrame) -> pd.DataFrame:
         predictions = self._score(data)
         predictions['predicted_as_anomaly'] = predictions['anomaly_score'] > self.threshold
         return predictions
