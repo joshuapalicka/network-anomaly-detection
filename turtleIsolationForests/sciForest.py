@@ -12,16 +12,9 @@ class Hyperplane:
     def __init__(self, vector: np.ndarray[np.float64], data: pd.DataFrame):
         self.vector = vector
         self.projected_data = data.apply(self.project, axis=1, raw=True).to_numpy()
-        #print(self.projected_data)
-        #print(type(self.projected_data))    
     
     def project(self, vector: np.ndarray[np.float64]) -> np.float64:
-        #print("hyperplane vector shape: " + str(self.vector.shape))
-        #print("input vector shape: " + str(vector.shape))
-        res = np.dot(vector, self.vector)
-        #print(res)
-        #print(type(res))
-        return res#np.dot(vector, self.vector)
+        return np.dot(vector, self.vector)
 
 class HyperplaneDecision:
 
@@ -33,10 +26,7 @@ class HyperplaneDecision:
         return self.go_left_projected(self.hyperplane.project(point_of_interest))
     
     def go_left_projected(self, projected_point_of_interest: np.float64) -> bool:
-        goleft = projected_point_of_interest < self.projected_intercept
-        #print(projected_point_of_interest)
-        #print(type(projected_point_of_interest))
-        return goleft
+        return projected_point_of_interest < self.projected_intercept
 
 class SCIsolationTree(IsolationTree):
 
@@ -53,11 +43,6 @@ class SCIsolationTree(IsolationTree):
     #SCiForest generates multiple hyperplanes and chooses the best
     #They have a method for generating hyperplanes in their paper that does not require scaling in preprocessing
     #But since we will scale, I do not need to account for non-1 stdevs, and have simplified code accordingly.
-    #
-    # the authors generate tau hyperplanes
-    # for each hyperplane, they generate coefficients and test all available points as possible split points
-    # the split point that produces the highest gain is the best version of that hyperplane
-    # the best version of the best of the tau planes is the chosen decision
     def _decide_split(self) -> HyperplaneDecision:
         hyperplane = Hyperplane(self._random_vector_on_unit_sphere(self.num_attrs_per_split), self.data)
         decision = self._best_decision_for_hyperplane(hyperplane)
@@ -71,31 +56,95 @@ class SCIsolationTree(IsolationTree):
         return decision
     
     def _best_decision_for_hyperplane(self, hyperplane: Hyperplane) -> HyperplaneDecision:
-        split = self.data.iloc[0].to_numpy()
-        best_decision = HyperplaneDecision(hyperplane, split)
-        best_decision.gain = self._gain(best_decision)
-        best_gain = best_decision.gain
-        i = 1
-        while i < len(self.data.index):
-            split = self.data.iloc[i].to_numpy()
-            decision = HyperplaneDecision(hyperplane, split)
-            decision.gain = self._gain(decision)
-            if decision.gain > best_gain:
-                best_gain = decision.gain
-                best_decision = decision
+        projected_data = hyperplane.projected_data
+        projected_data.sort()
+        left_stdevs, right_stdevs, all_stdev = self._split_stdevs_one_pass(projected_data)
+
+        i = 0
+        best_gain = -16
+        best_index = -1
+        while i < len(projected_data):
+            avg_stdev = (left_stdevs[i] + right_stdevs[i]) / 2 # paper cites one-pass solution for stdev calculation in Knuth book.
+            gain = (all_stdev - avg_stdev) / all_stdev
+            if gain > best_gain:
+                best_gain = gain
+                best_index = i
             i += 1
-        return best_decision
+
+        decision = HyperplaneDecision(hyperplane, hyperplane.projected_data[best_index])
+        decision.gain = best_gain
+        decision.left_data = None #how to preserve index information to efficiently assign left and right data?
+        return decision
+    
+    # Calculates all left/right split standard deviations (and the global st.dev) in one pass over the data
+    # The result is meaningful only if the projected data passed in is sorted
+    # This is an implementation of Welford's online algorithm as described at https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+    def _split_stdevs_one_pass(self, projected_data: np.ndarray[np.float64]) -> tuple[np.ndarray[np.float64], np.ndarray[np.float64], np.float64]:
+        len_data = len(projected_data)
+        left_vars = np.zeros(len_data)
+        left_means = np.zeros(len_data)
+        right_vars = np.zeros(len_data)
+        right_means = np.zeros(len_data)
+        all_var = 0
+        all_mean = 0
+        i = 0
+        while i < len_data:
+            xi = projected_data[i] # alias the current datum for brevity
+            i += 1 # it is convenient to increment i here since all further uses refer to the number of data seen so far
+
+            # update global mean/variance
+            prev_all_mean = all_mean
+            all_mean += (xi - all_mean) / i
+            all_var += (xi - prev_all_mean) * (xi - all_mean)
+
+            # update split means/variances
+            self._update_split_means(i, xi, left_means, left_vars, right_means, right_vars)
+        
+        # deferred divisions in the variances executed here for speed and floating point error reduction
+        all_var /= len_data
+        i = 0
+        while i < len_data:
+            left_vars[i] /= len_data
+            right_vars[i] /= len_data
+            i += 1
+        
+        # sqrt to get standard deviations
+        all_stdev = np.sqrt(all_var)
+        left_stdevs = np.sqrt(left_vars)
+        right_stdevs = np.sqrt(right_vars)
+
+        return left_stdevs, right_stdevs, all_stdev
+
+    # I wonder if I can get numpy to parallelize this for me... gotta go fast
+    def _update_split_means(self, i, xi, left_means, left_vars, right_means, right_vars):
+        j = 0
+        while j < len(left_means):
+            self._update_split_mean(i, j, xi, left_means, left_vars, right_means, right_vars)
+            j += 1
+    
+    def _update_split_mean(self, i, j, xi, left_means, left_vars, right_means, right_vars):
+        if j < i: #split point itself goes to right statistics
+            prev_left_mean_j = left_means[j]
+            left_means[j] += (xi - left_means[j]) / i
+            left_vars[j] += (xi - prev_left_mean_j) * (xi - left_means[j])
+        else:
+            prev_right_mean_j = right_means[j]
+            right_means[j] += (xi - right_means[j]) / i
+            right_vars[j] += (xi - prev_right_mean_j) * (xi - right_means[j])
     
     def _gain(self, decision: HyperplaneDecision) -> float:
         projected_data = decision.hyperplane.projected_data
-        #print(projected_data)
-        #print(type(projected_data))
-        #print(projected_data.shape)
         left_indices = decision.go_left_projected(projected_data)
         decision.left_data = self.data.loc[left_indices]
         decision.right_data = self.data.loc[~left_indices]
-        projected_left = projected_data[left_indices]                                                  # filtered series
-        projected_right = projected_data[~left_indices]                                                # filtered series
+        projected_left = projected_data[left_indices]
+        projected_right = projected_data[~left_indices]
+        print('projected_data: ' + str(type(projected_data)) + str(projected_data.shape))
+        print('projected_left: ' + str(type(projected_left)) + str(projected_left.shape))
+        print('projected_right: ' + str(type(projected_right)) + str(projected_right.shape))
+        return _gain(projected_data, projected_left, projected_right)
+    
+    def _gain(self, projected_data, projected_left, projected_right):
         sigma_y = np.std(projected_data)
         sigma_yl = np.std(projected_left)
         sigma_yr = np.std(projected_right)
@@ -113,8 +162,6 @@ class SCIsolationTree(IsolationTree):
         for index in column_indices:
             vector[index] = rng.standard_normal(1)[0]
         return vector
-        #return rng.standard_normal(len(self.data.columns)) #for simplicity, not implementing num_attributes_per_hyperplane parameter
-                                                           #This SCiForest will always use all columns for every hyperplane.
     
     def _random_intercept(self) -> np.ndarray[np.float64]:
         return rng.uniform(low=self.data.apply(min), high=self.data.apply(max))
