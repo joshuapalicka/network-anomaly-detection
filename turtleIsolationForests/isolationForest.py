@@ -1,4 +1,4 @@
-from turtleIsolationForests.optimizeThreshold import optimize_threshold
+from turtleIsolationForests.optimizeThreshold import optimal_threshold_index
 import math
 import numpy as np
 from numpy.random import default_rng
@@ -114,14 +114,12 @@ class IsolationForest:
     
     def _calculate_anomaly_score_threshold(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> float:
         self.train_scores = self._score(train_data)
-        self.train_scores['is_anomaly'] = train_labels
         if self.contamination == 'auto':
-            self.train_scores.sort_values('anomaly_score', inplace=True, ignore_index=True)
-            threshold = optimize_threshold(self.train_scores)   
+            ordered_indexes = np.argsort(self.train_scores)
+            threshold = self.train_scores[optimal_threshold_index(self.train_scores, train_labels, ordered_indexes)]   
         else:
             percentile_contamination = 100 * self._adapt_contamination(train_data)
             threshold = np.percentile(self.train_scores, 100 - percentile_contamination)
-        self.train_scores['predicted_as_anomaly'] = self.train_scores['anomaly_score'] > threshold
         return threshold
     
     def _adapt_contamination(self, data: pd.DataFrame) -> float:       #accept int contaminations, but work internally only with float contaminations in [0,1]
@@ -132,21 +130,13 @@ class IsolationForest:
         else:
             return 0.5
 
-    def predict(self, test_data: pd.DataFrame, test_labels: pd.Series) -> pd.DataFrame: #I can maybe get a slight speedup by dropping the DataFrame output and
-                                                                                        #instead outputting a numpy array.
-        predictions = self.predict_against_threshold(test_data)
-        predictions['is_anomaly'] = test_labels
-        return predictions
+    def predict(self, test_data: pd.DataFrame, test_labels: pd.Series) -> tuple[np.ndarray[np.float64], np.ndarray[np.bool8]]:
+        scores = self._score(test_data)
+        predictions = scores > self.threshold
+        return scores, predictions
     
-    def predict_against_threshold(self, test_data: pd.DataFrame) -> pd.DataFrame:
-        predictions = self._score(test_data)
-        predictions['predicted_as_anomaly'] = predictions['anomaly_score'] > self.threshold
-        return predictions
-    
-    def _score(self, data: pd.DataFrame) -> pd.DataFrame:
-        scoreframe = pd.DataFrame(index=data.index)
-        scoreframe['anomaly_score'] = data.apply(self._calculate_anomaly_score, axis=1, raw=True, result_type='reduce')
-        return scoreframe
+    def _score(self, data: pd.DataFrame) -> np.ndarray[np.bool8]:
+        return data.apply(self._calculate_anomaly_score, axis=1, raw=True, result_type='reduce').to_numpy()
     
     def _calculate_anomaly_score(self, point: np.ndarray[np.float64]) -> float:
         running_total = 0

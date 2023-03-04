@@ -1,26 +1,30 @@
 from sklearn.metrics import roc_curve, auc
 from pandas import DataFrame
 import numpy as np
+from numba import prange, jit, float64, bool_
 from time import time
 import typing
 
 def notebook_visual_printout(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, model: any) -> None:
+    train_labels_np = train_labels.to_numpy()
+    test_labels_np = test_labels.to_numpy()
     start_time = time()
     model.fit(X_train, train_labels)
     fit_time = time() - start_time
     print("Time to fit model: " + str(fit_time))
     print("Threshold: " + str(model.threshold))
     print("\nTraining set results:")
-    train_predictions = model.train_scores
-    print_results(train_predictions)
-    print("auroc: " + str(get_auroc_value(train_predictions)))
+    train_scores = model.train_scores
+    train_predictions = train_scores > model.threshold
+    print_results(train_predictions, train_labels_np)
+    print("auroc: " + str(get_auroc_value(train_scores, train_labels_np)))
     start_time = time()
-    predictions = model.predict(X_test, test_labels)
+    scores, predictions = model.predict(X_test, test_labels)
     test_predict_time = time() - start_time
     print("\nTime to predict test data: " + str(test_predict_time))
     print("Test set results:")
-    print_results(predictions)
-    print("auroc: " + str(get_auroc_value(predictions)))
+    print_results(predictions, test_labels_np)
+    print("auroc: " + str(get_auroc_value(scores, test_labels_np)))
     print("\n")
 
 def csv_printout(runs: int, X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, model: any) -> None:
@@ -28,27 +32,29 @@ def csv_printout(runs: int, X_train: DataFrame, X_test: DataFrame, train_labels:
     for i in range(runs):
         model.fit(X_train, train_labels)
         start_time = time()
-        predictions = model.predict(X_test, test_labels)
+        scores, predictions = model.predict(X_test, test_labels)
         test_predict_time = time() - start_time
         TA, FA, FN, TN = return_results(predictions)
         precision, recall, f1 = calc_f1(TA, FA, FN, TN)
-        auroc = get_auroc_value(predictions)
+        auroc = get_auroc_value(scores, test_labels)
         print(str(i) + "," + str(precision) + "," + str(recall) + "," + str(f1) + "," + str(auroc) + "," + str(test_predict_time))
 
-def get_auroc_value(predictions: DataFrame) -> float:
-    (fpr, tpr, _) = get_auroc_points(predictions)
+def get_auroc_value(scores: np.ndarray[np.float64], labels: np.ndarray[np.bool8]) -> float:
+    (fpr, tpr, _) = get_auroc_points(scores, labels)
     return get_auc(fpr, tpr)
 
-def get_auroc_points(predictions: DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    y_true = predictions['is_anomaly']
-    y_score = predictions['anomaly_score']
-    return roc_curve(y_true, y_score, pos_label=1)
+def get_auroc_points(scores: np.ndarray[np.float64], labels: np.ndarray[np.bool8]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return roc_curve(labels, scores, pos_label=True)
 
 def get_auc(x: np.ndarray, y: np.ndarray) -> float:
     return auc(x, y)
 
-def print_results(predictions: DataFrame) -> None:
-    TA, FA, FN, TN = return_results(predictions)
+def print_results(predictions: np.ndarray[np.bool8], labels: np.ndarray[np.bool8]) -> None:
+    confusion = calc_confusion(predictions, labels)
+    TA = confusion[0]
+    FA = confusion[1]
+    FN = confusion[2]
+    TN = confusion[3]
 
     precision, recall, f1 = calc_f1(TA, FA, FN, TN)
 
@@ -63,21 +69,23 @@ def print_by_result(TA: int, FA: int, FN: int, TN: int, precision: float, recall
     print("recall: " + str(recall))
     print("f1-score: " + str(f1))
 
-def return_results(predictions: DataFrame) -> (int, int, int, int):
-    anomalies = predictions.loc[predictions['is_anomaly']]
-    normals = predictions.loc[~predictions['is_anomaly']]
-
-    true_anomalies = anomalies.loc[predictions['predicted_as_anomaly']]
-    false_anomalies = normals.loc[predictions['predicted_as_anomaly']]
-    false_normals = anomalies.loc[~predictions['predicted_as_anomaly']]
-    true_normals = normals.loc[~predictions['predicted_as_anomaly']]
-
-    TA = len(true_anomalies)
-    FA = len(false_anomalies)
-    FN = len(false_normals)
-    TN = len(true_normals)
-
-    return TA, FA, FN, TN
+@jit(float64[:](bool_[:], bool_[:]), parallel=True)
+def calc_confusion(predictions: np.ndarray[np.bool8], labels: np.ndarray[np.bool8]) -> np.ndarray[np.float64]:
+    #print(type(predictions))
+    #print(type(labels))
+    confusion = np.zeros(4) # TA, FA, FN, TN
+    for i in prange(len(labels)):
+        if labels[i]:
+            if predictions[i]:
+                confusion[0] += 1
+            else:
+                confusion[2] += 1
+        else:
+            if predictions[i]:
+                confusion[1] += 1
+            else:
+                confusion[3] += 1
+    return confusion
 
 def calc_f1(TA: int, FA: int, FN: int, TN: int) -> (float, float, float):
     if TA == 0:
