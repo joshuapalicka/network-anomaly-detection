@@ -1,14 +1,14 @@
 from turtleIsolationForests.isolationForest import IsolationForest, IsolationTree, c
 import math
 import numpy as np
-from numba import prange, njit, int32, float64, void
+from numba import prange, jit, int32, float64, void
 import pandas as pd
 import random
 import typing
 
 rng = np.random.default_rng()
 
-@njit(void(int32, int32, float64[:,:], float64[:,:]), parallel=True)
+@jit(void(int32, int32, float64[:,:], float64[:,:]), parallel=True)
 def _update_split_stats(i: int, xi: np.float64, split_means: np.ndarray[np.float64], split_vars: np.ndarray[np.float64]):
     limit = len(split_means)
     for j in prange(limit):
@@ -53,18 +53,6 @@ def _split_stdevs_one_pass(projected_data: np.ndarray[np.float64], sorted_indice
 
     return split_stdevs, all_stdev
 
-def _random_vector_on_unit_sphere(num_attributes, total_attributes) -> np.ndarray[np.float64]:
-    #num_attributes = self.num_attrs_per_split
-    #total_attributes = len(self.data.columns)
-    if num_attributes > total_attributes or num_attributes <= 0:
-        raise AttributeError("num_attributes_per_split = " + str(num_attributes) + " is either nonpositive or larger than the number of columns")
-    column_indices = rng.choice(total_attributes, num_attributes, replace=False)
-    vector_coefs = rng.standard_normal(num_attributes)
-    #vector = np.zeros(total_attributes)
-    #vector[column_indices] = rng.standard_normal()
-    #return vector
-    return vector_coefs, column_indices
-
 class Hyperplane:
 
     def __init__(self, vector_coefs: np.ndarray[np.float64], column_indices: np.ndarray[np.float64], data: pd.DataFrame):
@@ -102,12 +90,11 @@ class SCIsolationTree(IsolationTree):
     #They have a method for generating hyperplanes in their paper that does not require scaling in preprocessing
     #But since we will scale, I do not need to account for non-1 stdevs, and have simplified code accordingly.
     def _decide_split(self) -> HyperplaneDecision:
-        total_attributes = len(self.data.columns)
         best_decision = None
         best_gain = -16
         i = 0
         while i < self.num_hyperplanes_per_split:
-            vector_coefs, column_indices = _random_vector_on_unit_sphere(self.num_attrs_per_split, total_attributes)
+            vector_coefs, column_indices = self._random_vector_on_unit_sphere()
             next_hyperplane = Hyperplane(vector_coefs, column_indices, self.data)
             next_decision = self._best_decision_for_hyperplane(next_hyperplane)
             next_gain = next_decision.gain
@@ -136,6 +123,18 @@ class SCIsolationTree(IsolationTree):
         decision = HyperplaneDecision(hyperplane, hyperplane.projected_data[sorted_indices[best_i]])
         decision.gain = best_gain
         return decision
+
+    def _random_vector_on_unit_sphere(self) -> np.ndarray[np.float64]:
+        num_attributes = self.num_attrs_per_split
+        total_attributes = len(self.data.columns)
+        if num_attributes > total_attributes or num_attributes <= 0:
+            raise AttributeError("num_attributes_per_split = " + str(num_attributes) + " is either nonpositive or larger than the number of columns")
+        column_indices = rng.choice(total_attributes, num_attributes, replace=False)
+        vector_coefs = rng.standard_normal(num_attributes)
+        #vector = np.zeros(total_attributes)
+        #vector[column_indices] = rng.standard_normal()
+        #return vector
+        return vector_coefs, column_indices
 
 class SCIsolationForest(IsolationForest):
 

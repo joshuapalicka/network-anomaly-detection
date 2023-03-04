@@ -9,16 +9,6 @@ import typing
 
 rng = default_rng()
 
-def _calculate_anomaly_score(point: np.ndarray[np.float64], forest: list, c: float) -> float:
-    running_total = 0
-    count = 0
-    for tree in forest:
-        running_total += tree.path_length(point)
-        count += 1
-    path_length = running_total / count
-
-    return 2 ** (-1 * path_length / c)     #Equation 2 from original Isolation Forest paper
-
 class Decision:
 
     def __init__(self, attribute: str, attribute_index: int, value: float):
@@ -37,6 +27,9 @@ class IsolationTree:
         self.left = None                            #left child Isolation Tree.
         self.right = None                           #right child Isolation Tree.
         self.decision = None                        #if interior node, the decision function (set by split), if leaf, None.
+    
+    def to_numpy(self) -> np.ndarray[float64, float64]:
+        pass
     
     def path_length(self, point: np.ndarray[np.float64]) -> float:
         tree_pointer = self
@@ -127,10 +120,7 @@ class IsolationForest:
             threshold = optimize_threshold(self.train_scores)   
         else:
             percentile_contamination = 100 * self._adapt_contamination(train_data)
-            threshold = np.percentile(self.train_scores, 100 - percentile_contamination)        
-                                                #this takes aaaaages. how is sklearn doing it so fast, and is it during fit or predict?
-                                                #It's during fit
-                                                #I bet it's parallelism through cython
+            threshold = np.percentile(self.train_scores, 100 - percentile_contamination)
         self.train_scores['predicted_as_anomaly'] = self.train_scores['anomaly_score'] > threshold
         return threshold
     
@@ -142,7 +132,8 @@ class IsolationForest:
         else:
             return 0.5
 
-    def predict(self, test_data: pd.DataFrame, test_labels: pd.Series) -> pd.DataFrame:
+    def predict(self, test_data: pd.DataFrame, test_labels: pd.Series) -> pd.DataFrame: #I can maybe get a slight speedup by dropping the DataFrame output and
+                                                                                        #instead outputting a numpy array.
         predictions = self.predict_against_threshold(test_data)
         predictions['is_anomaly'] = test_labels
         return predictions
@@ -154,8 +145,18 @@ class IsolationForest:
     
     def _score(self, data: pd.DataFrame) -> pd.DataFrame:
         scoreframe = pd.DataFrame(index=data.index)
-        scoreframe['anomaly_score'] = data.apply(_calculate_anomaly_score, axis=1, raw=True, result_type='reduce', forest = self.forest, c = self.c)
+        scoreframe['anomaly_score'] = data.apply(self._calculate_anomaly_score, axis=1, raw=True, result_type='reduce')
         return scoreframe
+    
+    def _calculate_anomaly_score(self, point: np.ndarray[np.float64]) -> float:
+        running_total = 0
+        count = 0
+        for tree in self.forest:
+            running_total += tree.path_length(point)
+            count += 1
+        path_length = running_total / count
+
+        return 2 ** (-1 * path_length / self.c)     #Equation 2 from original Isolation Forest paper
 
 def c(n: int) -> float:                             #c(n) as defined in Isolation Forest Paper (2012) is the average path length
                                                     #of an unsuccessful BST search and is used to normalize anomaly scores
