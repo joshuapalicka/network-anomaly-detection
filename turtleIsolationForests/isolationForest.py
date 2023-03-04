@@ -2,11 +2,22 @@ from turtleIsolationForests.optimizeThreshold import optimize_threshold
 import math
 import numpy as np
 from numpy.random import default_rng
+from numba import prange, jit, float64, void
 import pandas as pd
 import random
 import typing
 
 rng = default_rng()
+
+def _calculate_anomaly_score(point: np.ndarray[np.float64], forest: list, c: float) -> float:
+    running_total = 0
+    count = 0
+    for tree in forest:
+        running_total += tree.path_length(point)
+        count += 1
+    path_length = running_total / count
+
+    return 2 ** (-1 * path_length / c)     #Equation 2 from original Isolation Forest paper
 
 class Decision:
 
@@ -137,30 +148,14 @@ class IsolationForest:
         return predictions
     
     def predict_against_threshold(self, test_data: pd.DataFrame) -> pd.DataFrame:
-        predictions = self._score(data)
+        predictions = self._score(test_data)
         predictions['predicted_as_anomaly'] = predictions['anomaly_score'] > self.threshold
         return predictions
     
     def _score(self, data: pd.DataFrame) -> pd.DataFrame:
         scoreframe = pd.DataFrame(index=data.index)
-        scoreframe['anomaly_score'] = self._calculate_anomaly_scores(data)
+        scoreframe['anomaly_score'] = data.apply(_calculate_anomaly_score, axis=1, raw=True, result_type='reduce', forest = self.forest, c = self.c)
         return scoreframe
-    
-    def _calculate_anomaly_scores(self, data: pd.DataFrame) -> pd.DataFrame:
-        self.len_data = len(data)
-        anomaly_scores = data.apply(self._calculate_anomaly_score, axis=1, raw=True, result_type='reduce')
-        del self.len_data
-        return anomaly_scores
-    
-    def _calculate_anomaly_score(self, point: np.ndarray[np.float64]) -> float:
-        running_total = 0
-        count = 0
-        for tree in self.forest:
-            running_total += tree.path_length(point)
-            count += 1
-        path_length = running_total / count
-                                                    #Equation 2 from original Isolation Forest paper
-        return 2 ** (-1 * path_length / self.c)
 
 def c(n: int) -> float:                             #c(n) as defined in Isolation Forest Paper (2012) is the average path length
                                                     #of an unsuccessful BST search and is used to normalize anomaly scores

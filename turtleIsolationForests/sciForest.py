@@ -1,20 +1,79 @@
 from turtleIsolationForests.isolationForest import IsolationForest, IsolationTree, c
 import math
 import numpy as np
+from numba import prange, njit, int32, float64, void
 import pandas as pd
 import random
 import typing
 
 rng = np.random.default_rng()
 
+@njit(void(int32, int32, float64[:,:], float64[:,:]), parallel=True)
+def _update_split_stats(i: int, xi: np.float64, split_means: np.ndarray[np.float64], split_vars: np.ndarray[np.float64]):
+    limit = len(split_means)
+    for j in prange(limit):
+        if j < i: #split point itself goes to right statistics
+            prev_mean_j = split_means[j, 0]
+            split_means[j, 0] += (xi - split_means[j, 0]) / i
+            split_vars[j, 0] += (xi - prev_mean_j) * (xi - split_means[j, 0])
+        else:
+            prev_mean_j = split_means[j, 1]
+            split_means[j, 1] += (xi - split_means[j, 1]) / i
+            split_vars[j, 1] += (xi - prev_mean_j) * (xi - split_means[j, 1])
+
+# Calculates all left/right split standard deviations (and the global st.dev) in one pass over the data
+# The result is meaningful only if the projected data passed in is sorted
+# This is an implementation of Welford's online algorithm as described at https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+def _split_stdevs_one_pass(projected_data: np.ndarray[np.float64], sorted_indices: np.ndarray[int]) -> tuple[np.ndarray[np.float64], np.ndarray[np.float64], np.float64]:
+    len_data = len(projected_data)
+    split_vars = np.zeros((len_data, 2), dtype=np.float64)
+    split_means = np.zeros((len_data, 2), dtype=np.float64)
+    all_var = 0
+    all_mean = 0
+    i = 0
+    while i < len_data:
+        xi = projected_data[sorted_indices[i]] # alias the current datum for brevity
+        i += 1 # it is convenient to increment i here since all further uses refer to the number of data seen so far
+
+        # update global mean/variance
+        prev_all_mean = all_mean
+        all_mean += (xi - all_mean) / i
+        all_var += (xi - prev_all_mean) * (xi - all_mean)
+
+        # update split means/variances
+        _update_split_stats(i, xi, split_means, split_vars)
+    
+    # deferred divisions in the variances executed here for speed and floating point error reduction
+    all_var /= len_data
+    split_vars /= len_data
+    
+    # sqrt to get standard deviations
+    all_stdev = np.sqrt(all_var)
+    split_stdevs = np.sqrt(split_vars)
+
+    return split_stdevs, all_stdev
+
+def _random_vector_on_unit_sphere(num_attributes, total_attributes) -> np.ndarray[np.float64]:
+    #num_attributes = self.num_attrs_per_split
+    #total_attributes = len(self.data.columns)
+    if num_attributes > total_attributes or num_attributes <= 0:
+        raise AttributeError("num_attributes_per_split = " + str(num_attributes) + " is either nonpositive or larger than the number of columns")
+    column_indices = rng.choice(total_attributes, num_attributes, replace=False)
+    vector_coefs = rng.standard_normal(num_attributes)
+    #vector = np.zeros(total_attributes)
+    #vector[column_indices] = rng.standard_normal()
+    #return vector
+    return vector_coefs, column_indices
+
 class Hyperplane:
 
-    def __init__(self, vector: np.ndarray[np.float64], data: pd.DataFrame):
-        self.vector = vector
+    def __init__(self, vector_coefs: np.ndarray[np.float64], column_indices: np.ndarray[np.float64], data: pd.DataFrame):
+        self.vector_coefs = vector_coefs
+        self.column_indices = column_indices
         self.projected_data = data.apply(self.project, axis=1, raw=True).to_numpy()
     
     def project(self, vector: np.ndarray[np.float64]) -> np.float64:
-        return np.dot(vector, self.vector)
+        return np.dot(vector[self.column_indices], self.vector_coefs)
 
 class HyperplaneDecision:
 
@@ -43,11 +102,13 @@ class SCIsolationTree(IsolationTree):
     #They have a method for generating hyperplanes in their paper that does not require scaling in preprocessing
     #But since we will scale, I do not need to account for non-1 stdevs, and have simplified code accordingly.
     def _decide_split(self) -> HyperplaneDecision:
+        total_attributes = len(self.data.columns)
         best_decision = None
         best_gain = -16
         i = 0
         while i < self.num_hyperplanes_per_split:
-            next_hyperplane = Hyperplane(self._random_vector_on_unit_sphere(self.num_attrs_per_split), self.data)
+            vector_coefs, column_indices = _random_vector_on_unit_sphere(self.num_attrs_per_split, total_attributes)
+            next_hyperplane = Hyperplane(vector_coefs, column_indices, self.data)
             next_decision = self._best_decision_for_hyperplane(next_hyperplane)
             next_gain = next_decision.gain
             if next_gain >= best_gain:
@@ -58,7 +119,7 @@ class SCIsolationTree(IsolationTree):
     
     def _best_decision_for_hyperplane(self, hyperplane: Hyperplane) -> HyperplaneDecision:
         sorted_indices = np.argsort(hyperplane.projected_data)
-        split_stdevs, all_stdev = self._split_stdevs_one_pass(hyperplane.projected_data, sorted_indices)
+        split_stdevs, all_stdev = _split_stdevs_one_pass(hyperplane.projected_data, sorted_indices)
 
         i = 0
         best_gain = -16
@@ -75,62 +136,6 @@ class SCIsolationTree(IsolationTree):
         decision = HyperplaneDecision(hyperplane, hyperplane.projected_data[sorted_indices[best_i]])
         decision.gain = best_gain
         return decision
-    
-    # Calculates all left/right split standard deviations (and the global st.dev) in one pass over the data
-    # The result is meaningful only if the projected data passed in is sorted
-    # This is an implementation of Welford's online algorithm as described at https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-    def _split_stdevs_one_pass(self, projected_data: np.ndarray[np.float64], sorted_indices: np.ndarray[int]) -> tuple[np.ndarray[np.float64], np.ndarray[np.float64], np.float64]:
-        len_data = len(projected_data)
-        split_vars = np.zeros((len_data, 2))
-        split_means = np.zeros((len_data, 2))
-        all_var = 0
-        all_mean = 0
-        i = 0
-        while i < len_data:
-            xi = projected_data[sorted_indices[i]] # alias the current datum for brevity
-            i += 1 # it is convenient to increment i here since all further uses refer to the number of data seen so far
-
-            # update global mean/variance
-            prev_all_mean = all_mean
-            all_mean += (xi - all_mean) / i
-            all_var += (xi - prev_all_mean) * (xi - all_mean)
-
-            # update split means/variances
-            self._update_split_stats(i, xi, split_means, split_vars)
-        
-        # deferred divisions in the variances executed here for speed and floating point error reduction
-        all_var /= len_data
-        split_vars /= len_data
-        
-        # sqrt to get standard deviations
-        all_stdev = np.sqrt(all_var)
-        split_stdevs = np.sqrt(split_vars)
-
-        return split_stdevs, all_stdev
-
-    # I wonder if I can get numpy to parallelize this for me... gotta go fast
-    def _update_split_stats(self, i, xi, split_means, split_vars):
-        j = 0
-        while j < len(split_means):
-            self._update_split_stat(i, j, xi, split_means, split_vars)
-            j += 1
-    
-    def _update_split_stat(self, i, j, xi, split_means, split_vars):
-        if j < i: #split point itself goes to right statistics
-            prev_mean_j = split_means[j, 0]
-            split_means[j, 0] += (xi - split_means[j, 0]) / i
-            split_vars[j, 0] += (xi - prev_mean_j) * (xi - split_means[j, 0])
-        else:
-            prev_mean_j = split_means[j, 1]
-            split_means[j, 1] += (xi - split_means[j, 1]) / i
-            split_vars[j, 1] += (xi - prev_mean_j) * (xi - split_means[j, 1])
-
-    def _random_vector_on_unit_sphere(self, num_attributes: int) -> np.ndarray[np.float64]:
-        total_attrs = len(self.data.columns)
-        column_indices = rng.choice(total_attrs, num_attributes, replace=False)
-        vector = np.zeros(total_attrs)
-        vector[column_indices] = rng.standard_normal()
-        return vector
 
 class SCIsolationForest(IsolationForest):
 
