@@ -1,18 +1,23 @@
-from turtleIsolationForests.optimizeThreshold import optimize_threshold
+from turtleIsolationForests.optimizeThreshold import optimal_threshold_index
 import math
 import numpy as np
+from numpy.random import default_rng
+from numba import prange, jit, float64, void
 import pandas as pd
 import random
 import typing
 
+rng = default_rng()
+
 class Decision:
 
-    def __init__(self, attribute: list[float], value: list[float]):
+    def __init__(self, attribute: str, attribute_index: int, value: float):
         self.attribute = attribute
+        self.attribute_index = attribute_index
         self.value = value
     
-    def go_left(self, point_of_interest: pd.Series) -> bool:
-        return (point_of_interest[self.attribute] < self.value)
+    def go_left(self, point_of_interest: np.ndarray[np.float64]) -> bool:
+        return (point_of_interest[self.attribute_index] < self.value)
 
 class IsolationTree:
 
@@ -23,12 +28,16 @@ class IsolationTree:
         self.right = None                           #right child Isolation Tree.
         self.decision = None                        #if interior node, the decision function (set by split), if leaf, None.
     
-    def path_length(self, point: pd.Series) -> float:
+    def to_numpy(self) -> np.ndarray[float64, float64]:
+        pass
+    
+    def path_length(self, point: np.ndarray[np.float64]) -> float:
         tree_pointer = self
         path_length = 0
         while (tree_pointer.decision is not None):  #only leaves have None decision
             path_length += 1
-            if (tree_pointer.decision.go_left(point)):
+            left = tree_pointer.decision.go_left(point)
+            if (left):
                 tree_pointer = tree_pointer.left
             else:
                 tree_pointer = tree_pointer.right
@@ -42,24 +51,27 @@ class IsolationTree:
         self.right = IsolationTree(right_data)
     
     def _decide_split(self) -> Decision:
-        attribute = random.sample(list(self.data.columns), 1)[0]
+        attribute_index = rng.integers(len(self.data.columns))
+        attribute = self.data.columns[attribute_index]
         lower_bound = self.data[attribute].min()
         upper_bound = self.data[attribute].max()
-        split_value = random.uniform(lower_bound, upper_bound)
-        return Decision(attribute, split_value)
+        split_value = rng.uniform(lower_bound, upper_bound)
+        return Decision(attribute, attribute_index, split_value)
 
 class IsolationForest:
 
     def __init__(self,
-                 contamination = 'auto',            #if integer, the number of expected anomalies. If float [0,1], the proportion of expected anomalies.
-                 num_trees = 100,                   #default forest size as presented in original paper.
-                 subsample_size = 256,              #default subsample size as presented in original paper.
-                 random_state = None):
+                 contamination:any = 'auto',            #if integer, the number of expected anomalies. If float [0,1], the proportion of expected anomalies.
+                 num_trees:int = 100,                   #default forest size as presented in original paper.
+                 subsample_size:int = 256,              #default subsample size as presented in original paper.
+                 random_state:int = None,
+                 verbose:bool = False):                  #when true prints out status messages
         self.contamination = contamination
         self.subsample_size = subsample_size
         self.max_depth = math.floor(math.log2(subsample_size))  #Maximum tree depth. After this depth, the average depth of all points, by definition points are not anomalous.
         self.num_trees = num_trees
         self.random_state = random_state
+        self.verbose = verbose
         self.c = c(subsample_size)
     
     def _advance_random_state(self) -> None:        #have to change random_state to get different trees.
@@ -74,11 +86,13 @@ class IsolationForest:
                                 weights = None,
                                 random_state = self.random_state)
     
-    def fit(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> None:
+    def fit(self, train_data: pd.DataFrame, train_labels: pd.Series) -> None:
         self.forest = [self._make_tree(self._random_subsample(train_data)) for i in range(self.num_trees)]
-        print("Finished building forest")
+        if (self.verbose):
+            print("Finished building forest")
         self.threshold = self._calculate_anomaly_score_threshold(train_data, train_labels)
-        print("Finished calculating threshold")
+        if (self.verbose):
+            print("Finished calculating threshold")
 
     def _make_tree(self, sample_data: pd.DataFrame) -> IsolationTree:
         point_to_isolate = self._random_point(sample_data)
@@ -94,22 +108,19 @@ class IsolationForest:
             depth += 1
         return root
     
-    def _random_point(self, sample_data: pd.DataFrame) -> pd.Series:
+    def _random_point(self, sample_data: pd.DataFrame) -> np.ndarray[np.float64]:
         self._advance_random_state()
-        return sample_data.sample(n = 1, random_state = self.random_state).iloc[0]
+        return sample_data.sample(n = 1, random_state = self.random_state).iloc[0].to_numpy()
     
     def _calculate_anomaly_score_threshold(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> float:
-        train_scores = self._score(train_data)
+        self.train_scores = self._score(train_data)
         if self.contamination == 'auto':
-            train_scores['is_normal'] = train_labels
-            train_scores.sort_values('anomaly_score', inplace=True, ignore_index=True)
-            return optimize_threshold(train_scores)
+            ordered_indexes = np.argsort(self.train_scores)
+            threshold = self.train_scores[optimal_threshold_index(self.train_scores, train_labels, ordered_indexes)]   
         else:
             percentile_contamination = 100 * self._adapt_contamination(train_data)
-            return np.percentile(train_scores, 100 - percentile_contamination)        
-                                                #this takes aaaaages. how is sklearn doing it so fast, and is it during fit or predict?
-                                                #It's during fit
-                                                #I bet it's parallelism through cython
+            threshold = np.percentile(self.train_scores, 100 - percentile_contamination)
+        return threshold
     
     def _adapt_contamination(self, data: pd.DataFrame) -> float:       #accept int contaminations, but work internally only with float contaminations in [0,1]
         if self.contamination is float:
@@ -119,31 +130,23 @@ class IsolationForest:
         else:
             return 0.5
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        predictions = self._score(data)
-        predictions['predicted_as_anomaly'] = predictions['anomaly_score'] > self.threshold
-        return predictions
+    def predict(self, test_data: pd.DataFrame, test_labels: pd.Series) -> tuple[np.ndarray[np.float64], np.ndarray[np.bool8]]:
+        scores = self._score(test_data)
+        predictions = scores > self.threshold
+        return scores, predictions
     
-    def _score(self, data: pd.DataFrame) -> pd.DataFrame:
-        scoreframe = pd.DataFrame(index=data.index)
-        scoreframe['anomaly_score'] = self._calculate_anomaly_scores(data)
-        return scoreframe
+    def _score(self, data: pd.DataFrame) -> np.ndarray[np.bool8]:
+        return data.apply(self._calculate_anomaly_score, axis=1, raw=True, result_type='reduce').to_numpy()
     
-    def _calculate_anomaly_scores(self, data: pd.DataFrame) -> pd.DataFrame:
-        self.len_data = len(data)
-        anomaly_scores = data.apply(self._calculate_anomaly_score, axis=1, result_type='reduce')
-        del self.len_data
-        return anomaly_scores
-    
-    def _calculate_anomaly_score(self, point: pd.Series) -> float:
+    def _calculate_anomaly_score(self, point: np.ndarray[np.float64]) -> float:
         running_total = 0
         count = 0
         for tree in self.forest:
             running_total += tree.path_length(point)
             count += 1
         path_length = running_total / count
-                                                    #Equation 2 from original Isolation Forest paper
-        return 2 ** (-1 * path_length / self.c)
+
+        return 2 ** (-1 * path_length / self.c)     #Equation 2 from original Isolation Forest paper
 
 def c(n: int) -> float:                             #c(n) as defined in Isolation Forest Paper (2012) is the average path length
                                                     #of an unsuccessful BST search and is used to normalize anomaly scores

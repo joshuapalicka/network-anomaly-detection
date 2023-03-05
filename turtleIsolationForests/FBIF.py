@@ -16,8 +16,8 @@ class HypersphereDecision:
         self.center = center
         self.radiusSq = radius * radius
     
-    def go_left(self, point_of_interest: pd.Series) -> bool:
-        return euclidean_distance_sq(np.array(point_of_interest), self.center) <= self.radiusSq
+    def go_left(self, point_of_interest: np.ndarray[np.float64]) -> bool:
+        return euclidean_distance_sq(point_of_interest, self.center) <= self.radiusSq
 
 class FBIsolationTree(IsolationTree):
 
@@ -54,11 +54,16 @@ class FBIsolationTree(IsolationTree):
         #rMax = self.c2 * max(maxVal.combine(minVal, max))
 
         # New rMin, rMax norms the combined bounds rather than min/maxing them. This has superior scores.
-        rMin = self.c1 * np.linalg.norm(maxVal.combine(minVal, min), ord=2)
-        rMax = self.c2 * np.linalg.norm(maxVal.combine(minVal, max), ord=2)
+        #rMin = self.c1 * np.linalg.norm(maxVal.combine(minVal, min), ord=2)
+        #rMax = self.c2 * np.linalg.norm(maxVal.combine(minVal, max), ord=2)
         # Note: even small opposing changes in c1, c2 like 1.1,0.9 cause crash failures when rMin and rMax would be very close to each other
         # i.e. when the decision data contains few, close points. I also don't see much point in lowering c1 or increasing c2.
-        # Possibly I have automated c1,c2 tuning by introducing the normed rMin, rMax calculation.
+        # Testing adaptive c1, c2 below
+        rMin = np.linalg.norm(maxVal.combine(minVal, min), ord=2)
+        rMax = np.linalg.norm(maxVal.combine(minVal, max), ord=2)
+        rInter = rMax - rMin
+        rMin += (self.c1 - 1) * rInter
+        rMax += (self.c2 - 1) * rInter
  
         radius = rng.uniform(low=rMin, high=rMax)
         return HypersphereDecision(center, radius)
@@ -71,8 +76,9 @@ class FBIsolationForest(IsolationForest):
                  contamination = 'auto',            #if integer, the number of expected anomalies. If float [0,1], the proportion of expected anomalies.
                  num_trees = 100,                   #default forest size as presented in original paper.
                  subsample_size = 256,              #default subsample size as presented in original paper.
-                 random_state = None):
-        super().__init__(contamination, num_trees, subsample_size, random_state)
+                 random_state = None,
+                 verbose = False):
+        super().__init__(contamination, num_trees, subsample_size, random_state, verbose)
         self.c1 = c1
         self.c2 = c2
 
@@ -80,7 +86,7 @@ class FBIsolationForest(IsolationForest):
         tree = FBIsolationTree(sample_data, self.c1, self.c2)
         if len(sample_data) > 1 and depth < self.max_depth:
             tree.split()
-            left_indices = sample_data.apply(tree.decision.go_left, axis=1, result_type='reduce')
+            left_indices = sample_data.apply(tree.decision.go_left, axis=1, raw=True, result_type='reduce')
             left_data = sample_data.loc[left_indices]
             right_data = sample_data.loc[~left_indices]
             tree.left = self._make_tree(left_data, depth + 1)

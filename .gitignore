@@ -1,7 +1,15 @@
 data/
 ServerMachineDataset/
 SU_Data/
+local*/
 
 *.pyc
 
 *.jpg
+
+*.txt
+*.xls
+*.xlsx
+*.csv
+
+*_scalers.ipynb
