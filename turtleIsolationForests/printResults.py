@@ -1,7 +1,6 @@
 from sklearn.metrics import roc_curve, auc
 from pandas import DataFrame
 import numpy as np
-from numba import prange, jit, float64, bool_
 from time import time
 import typing
 
@@ -51,11 +50,7 @@ def get_auc(x: np.ndarray, y: np.ndarray) -> float:
     return auc(x, y)
 
 def print_results(predictions: np.ndarray[np.bool8], labels: np.ndarray[np.bool8]) -> None:
-    confusion = calc_confusion(predictions, labels)
-    TA = confusion[0]
-    FA = confusion[1]
-    FN = confusion[2]
-    TN = confusion[3]
+    TA, FA, FN, TN = calc_confusion(predictions, labels)
 
     precision, recall, f1 = calc_f1(TA, FA, FN, TN)
 
@@ -70,23 +65,12 @@ def print_by_result(TA: int, FA: int, FN: int, TN: int, precision: float, recall
     print("recall: " + str(recall))
     print("f1-score: " + str(f1))
 
-@jit(float64[:](bool_[:], bool_[:]), parallel=True)
 def calc_confusion(predictions: np.ndarray[np.bool8], labels: np.ndarray[np.bool8]) -> np.ndarray[np.float64]:
-    #print(type(predictions))
-    #print(type(labels))
-    confusion = np.zeros(4) # TA, FA, FN, TN
-    for i in prange(len(labels)):
-        if labels[i]:
-            if predictions[i]:
-                confusion[0] += 1
-            else:
-                confusion[2] += 1
-        else:
-            if predictions[i]:
-                confusion[1] += 1
-            else:
-                confusion[3] += 1
-    return confusion
+    TA = sum(labels & predictions)
+    FA = sum(~labels & predictions)
+    FN = sum(labels & ~predictions)
+    TN = sum(~labels & ~predictions)
+    return TA, FA, FN, TN
 
 def calc_f1(TA: int, FA: int, FN: int, TN: int) -> (float, float, float):
     if TA == 0:
