@@ -34,7 +34,7 @@ def csv_printout(runs: int, X_train: DataFrame, X_test: DataFrame, train_labels:
         start_time = time()
         scores, predictions = model.predict(X_test, test_labels)
         test_predict_time = time() - start_time
-        TA, FA, FN, TN = calc_confusion(predictions)
+        TA, FA, FN, TN = calc_confusion(predictions, test_labels)
         precision, recall, f1 = calc_f1(TA, FA, FN, TN)
         auroc = get_auroc_value(scores, test_labels)
         print(str(i) + "," + str(precision) + "," + str(recall) + "," + str(f1) + "," + str(auroc) + "," + str(test_predict_time))
