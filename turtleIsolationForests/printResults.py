@@ -30,13 +30,14 @@ def notebook_visual_printout(X_train: DataFrame, X_test: DataFrame, train_labels
 def csv_printout(runs: int, X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, model: any) -> None:
     print("run,precision,recall,f1,auroc,test_predict_time")
     for i in range(runs):
+        test_labels_np = test_labels.to_numpy()
         model.fit(X_train, train_labels)
         start_time = time()
-        scores, predictions = model.predict(X_test, test_labels)
+        scores, predictions = model.predict(X_test, test_labels_np)
         test_predict_time = time() - start_time
-        TA, FA, FN, TN = calc_confusion(predictions, test_labels)
+        TA, FA, FN, TN = calc_confusion(predictions, test_labels_np)
         precision, recall, f1 = calc_f1(TA, FA, FN, TN)
-        auroc = get_auroc_value(scores, test_labels)
+        auroc = get_auroc_value(scores, test_labels_np)
         print(str(i) + "," + str(precision) + "," + str(recall) + "," + str(f1) + "," + str(auroc) + "," + str(test_predict_time))
 
 def get_auroc_value(scores: np.ndarray[np.float64], labels: np.ndarray[np.bool8]) -> float:
