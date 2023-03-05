@@ -108,6 +108,12 @@ class SCIsolationTree(IsolationTree):
         sorted_indices = np.argsort(hyperplane.projected_data)
         split_stdevs, all_stdev = _split_stdevs_one_pass(hyperplane.projected_data, sorted_indices)
 
+        if all_stdev == 0: # case when all data are identical in relevant attributes, ex. if the attributes are all uncommon flags
+            midpoint = len(sorted_indices) // 2
+            decision = HyperplaneDecision(hyperplane, hyperplane.projected_data[sorted_indices[midpoint]])
+            decision.gain = 0
+            return decision
+
         i = 0
         best_gain = -16
         best_i = -1
