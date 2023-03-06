@@ -22,7 +22,7 @@ def preprocess_features_autoEncoder(train_dataframe: pd.DataFrame, test_datafram
     X_train = (train_dataframe - min_val) / (max_val - min_val)
     X_test = (test_dataframe - min_val) / (max_val - min_val)
 
-    test_dataframe = tf.cast(test_dataframe, tf.float32)
+    train_dataframe = tf.cast(train_dataframe, tf.float32)
     test_dataframe = tf.cast(test_dataframe, tf.float32)
 
     train_labels = train_labels.astype(bool)
