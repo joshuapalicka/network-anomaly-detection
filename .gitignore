@@ -13,3 +13,4 @@ local*/
 *.csv
 
 *_scalers.ipynb
+*_local.ipynb
