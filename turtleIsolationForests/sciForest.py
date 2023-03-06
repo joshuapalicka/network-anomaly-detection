@@ -59,6 +59,9 @@ class Hyperplane:
         self.vector_coefs = vector_coefs
         self.column_indices = column_indices
         self.projected_data = data.apply(self.project, axis=1, raw=True).to_numpy()
+        projection_range = np.ptp(self.projected_data)
+        self.lower_bound = -1 * projection_range
+        self.upper_bound = projection_range
     
     def project(self, vector: np.ndarray[np.float64]) -> np.float64:
         return np.dot(vector[self.column_indices], self.vector_coefs)
@@ -141,6 +144,21 @@ class SCIsolationTree(IsolationTree):
         #vector[column_indices] = rng.standard_normal()
         #return vector
         return vector_coefs, column_indices
+    
+    # SCiForest adds a range boundary per-node outside of which a point's depth will not increment.
+    def path_length(self, point: np.ndarray[np.float64]) -> float:
+        tree_pointer = self
+        path_length = 0
+        while (tree_pointer.decision is not None):  #only leaves have None decision
+            hyperplane = tree_pointer.decision.hyperplane
+            projected_point = hyperplane.project(point)
+            if projected_point >= hyperplane.lower_bound and projected_point <= hyperplane.upper_bound:
+                path_length += 1
+            if (tree_pointer.decision.go_left_projected(projected_point)):
+                tree_pointer = tree_pointer.left
+            else:
+                tree_pointer = tree_pointer.right
+        return path_length + c(tree_pointer.size)   #As in IF paper, returned path length is adjusted up by c(|tree_data|) at the terminal node
 
 class SCIsolationForest(IsolationForest):
 
