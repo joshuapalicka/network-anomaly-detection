@@ -28,9 +28,6 @@ class IsolationTree:
         self.right = None                           #right child Isolation Tree.
         self.decision = None                        #if interior node, the decision function (set by split), if leaf, None.
     
-    def to_numpy(self) -> np.ndarray[float64, float64]:
-        pass
-    
     def path_length(self, point: np.ndarray[np.float64]) -> float:
         tree_pointer = self
         path_length = 0
