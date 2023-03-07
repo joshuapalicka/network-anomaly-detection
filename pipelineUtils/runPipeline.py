@@ -12,8 +12,6 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
     test_labels_np = test_labels.to_numpy()
     X_train_ae = X_train[train_labels_np] #autoencoder trains only on normal data
     history = autoenc.pipeline_fit(X_train_ae, epochs=epochs)
-    X_train_forest = DataFrame(addZToData(X_train, autoenc))
-    iForest.fit(X_train_forest, train_labels)
     start_time = time()
     ae_scores, ae_predictions = autoenc.pipeline_predict(X_test, test_labels_np)
     ae_time = time() - start_time
@@ -24,7 +22,7 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
         plt.title("Training Loss & Validation Loss over epochs")
         plt.xlabel("Epochs")
         plt.ylabel("Loss")
-        plt.ylim([0,.25])
+        plt.ylim([0,.08])
         plt.legend(["Loss", "Validation Loss"])
         plt.show()
     if intermediatePrint:
@@ -35,6 +33,8 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
         print("auroc: " + str(ae_auroc))
         print("test set prediction time: " + str(ae_time))
         print("")
+    X_train_forest = DataFrame(addZToData(X_train, autoenc))
+    iForest.fit(X_train_forest, train_labels)
     X_test_forest = DataFrame(addZToData(X_test[ae_predictions], autoenc))
     test_labels_forest_np = test_labels_np[ae_predictions]
     start_time = time()
