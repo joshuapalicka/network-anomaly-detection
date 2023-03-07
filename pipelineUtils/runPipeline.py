@@ -1,4 +1,5 @@
 from matplotlib import pyplot as plt
+from numpy import ndarray
 from pandas import DataFrame, Series
 from time import time
 from autoencoder.aecExtraFeatures import getZVector
@@ -6,11 +7,12 @@ from turtleIsolationForests.printResults import calc_confusion, calc_f1, print_b
 import numpy as np
 import typing
 
-def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, 
-                 autoenc: any, iForest: any, intermediatePrint=False, printHistory=False, epochs=200):
+
+def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame,
+                 autoenc: any, iForest: any, intermediatePrint=False, printHistory=False, epochs=10):
     train_labels_np = train_labels.to_numpy()
     test_labels_np = test_labels.to_numpy()
-    X_train_ae = X_train[train_labels_np] #autoencoder trains only on normal data
+    X_train_ae = X_train[train_labels_np]  # autoencoder trains only on normal data
     history = autoenc.pipeline_fit(X_train_ae, epochs=epochs)
     start_time = time()
     ae_scores, ae_predictions = autoenc.pipeline_predict(X_test, test_labels_np)
@@ -22,7 +24,7 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
         plt.title("Training Loss & Validation Loss over epochs")
         plt.xlabel("Epochs")
         plt.ylabel("Loss")
-        plt.ylim([0,.08])
+        plt.ylim([0, .08])
         plt.legend(["Loss", "Validation Loss"])
         plt.show()
     if intermediatePrint:
@@ -33,9 +35,16 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
         print("auroc: " + str(ae_auroc))
         print("test set prediction time: " + str(ae_time))
         print("")
+
+    start_time = time()
     X_train_forest = DataFrame(addZToData(X_train, autoenc))
-    iForest.fit(X_train_forest, train_labels)
+    print("Adding Z to train data", time() - start_time)
+    start_time = time()
     X_test_forest = DataFrame(addZToData(X_test[ae_predictions], autoenc))
+    print("Adding Z to test data", time() - start_time)
+
+    iForest.fit(X_train_forest, train_labels)
+
     test_labels_forest_np = test_labels_np[ae_predictions]
     start_time = time()
     if_scores, if_predictions = iForest.predict(X_test_forest, test_labels_forest_np)
@@ -60,16 +69,22 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
     print("Percentage of data passed to stage 2: " + str(sum(ae_predictions) / len(ae_predictions)))
     print("Stage 2 prediction time: " + str(if_time))
 
-def addZToData(data: DataFrame, model) -> DataFrame:
+
+def addZToData(data: DataFrame, model) -> ndarray:
     data = data.to_numpy()
+
+    encoded = model.encoder(data)
+    decoded = model.decoder(encoded)
+
     data_with_Z = []
+
     for i in range(len(data)):
-        data_with_Z.append(addZToPoint(model, data[i:i+1]))
+        data_with_Z.append(addZToPoint(data[i:i + 1],  encoded[i:i+1], decoded[i:i+1]))
+
     data_with_Z_np = np.stack(data_with_Z)
     return data_with_Z_np
 
-def addZToPoint(model, data_point: np.ndarray):
-    encoded = model.encoder(data_point)
-    reconstruction = model.decoder(encoded)
-    Z_features = getZVector(data_point, reconstruction, encoded)
+
+def addZToPoint(data_point: np.ndarray, encoded_data_point, decoded_data_point):
+    Z_features = getZVector(data_point, decoded_data_point, encoded_data_point)
     return np.concatenate((data_point[0], Z_features))
