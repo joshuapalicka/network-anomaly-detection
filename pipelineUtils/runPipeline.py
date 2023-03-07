@@ -18,8 +18,9 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
     start_time = time()
     ae_scores, ae_predictions = autoenc.pipeline_predict(X_test, test_labels_np)
     ae_time = time() - start_time
-    ae_TA, ae_FA, ae_FN, ae_TN = calc_confusion(ae_predictions, test_labels)
+    ae_TA, ae_FA, ae_FN, ae_TN = calc_confusion(ae_predictions, test_labels_np)
     if printHistory:
+        print(history.history.keys())
         plt.plot(history.history["loss"])
         plt.plot(history.history["val_loss"])
         plt.title("Training Loss & Validation Loss over epochs")
