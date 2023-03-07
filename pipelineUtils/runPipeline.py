@@ -7,10 +7,10 @@ import numpy as np
 import typing
 
 def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, 
-                 autoenc: any, iForest: any, X_train_denoised: DataFrame = None, intermediatePrint=False, printHistory=False, epochs=200):
+                 autoenc: any, iForest: any, X_train_denoised: DataFrame = DataFrame(), intermediatePrint=False, printHistory=False, epochs=200):
     train_labels_np = train_labels.to_numpy()
     test_labels_np = test_labels.to_numpy()
-    if X_train_denoised == None:
+    if X_train_denoised.empty:
         X_train_ae = X_train[train_labels_np] #autoencoder trains only on normal data
     else:
         X_train_ae = X_train_denoised[train_labels_np] #or the denoised normal data from the robust autoencoder preprocessor
