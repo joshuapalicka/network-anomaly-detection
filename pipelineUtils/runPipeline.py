@@ -1,5 +1,5 @@
 from matplotlib import pyplot as plt
-from pandas import DataFrame, Series, concat
+from pandas import DataFrame, Series
 from time import time
 from autoencoder.aecExtraFeatures import getZVector
 from turtleIsolationForests.printResults import calc_confusion, calc_f1, print_by_result, get_auroc_value
@@ -7,13 +7,13 @@ import numpy as np
 import typing
 
 def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, 
-                 autoenc: any, iForest: any, intermediatePrint=False, printHistory=False):
+                 autoenc: any, iForest: any, intermediatePrint=False, printHistory=False, epochs=200):
     train_labels_np = train_labels.to_numpy()
     test_labels_np = test_labels.to_numpy()
     X_train_ae = X_train[train_labels_np] #autoencoder trains only on normal data
-    history = autoenc.pipeline_fit(X_train_ae)
-    X_train_forest_np = addZToData(X_train, autoenc)
-    iForest.fit(X_train_forest_np, train_labels)
+    history = autoenc.pipeline_fit(X_train_ae, epochs=epochs)
+    X_train_forest = DataFrame(addZToData(X_train, autoenc))
+    iForest.fit(X_train_forest, train_labels)
     start_time = time()
     ae_scores, ae_predictions = autoenc.pipeline_predict(X_test, test_labels_np)
     ae_time = time() - start_time
@@ -35,10 +35,10 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
         print("auroc: " + str(ae_auroc))
         print("test set prediction time: " + str(ae_time))
         print("")
-    X_test_forest_np = addZToData(X_test[ae_predictions], autoenc).to_numpy()
+    X_test_forest = DataFrame(addZToData(X_test[ae_predictions], autoenc))
     test_labels_forest_np = test_labels_np[ae_predictions]
     start_time = time()
-    if_scores, if_predictions = iForest.predict(X_test_forest_np, test_labels_forest_np)
+    if_scores, if_predictions = iForest.predict(X_test_forest, test_labels_forest_np)
     if_time = time() - start_time
     if_TA, if_FA, if_FN, if_TN = calc_confusion(if_predictions, test_labels_forest_np)
     if intermediatePrint:
@@ -61,33 +61,15 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
     print("Stage 2 prediction time: " + str(if_time))
 
 def addZToData(data: DataFrame, model) -> DataFrame:
+    data = data.to_numpy()
+    data_with_Z = []
+    for i in range(len(data)):
+        data_with_Z.append(addZToPoint(model, data[i:i+1]))
+    data_with_Z_np = np.stack(data_with_Z)
+    return data_with_Z_np
 
-    #data_with_Z = [addZToPrediction(model, datum) for datum in data]
-    z_data = data.apply(getZVector, axis=1, raw=True, result_type='expand', model=model)
-
-    #data_with_Z_rf = []
-    #for i in range(len(data_with_Z)):
-    #    data_with_Z_rf.append(np.append(data[:][:][i].numpy().reshape(1,46).squeeze(), data_with_Z[i]))
-
-    #def z_rf_function(i):
-    #    return np.append(data[:][:][i].numpy().reshape(1,46).squeeze(), data_with_Z[i])
-    
-    #data_with_Z_rf = [np.append(data[:][:][i].numpy().reshape(1,46).squeeze(), datum_with_Z) for datum_with_Z in data_with_Z]
-
-    #return np.ndarray(data_with_Z_rf)
-    #return np.fromfunction(z_rf_function, data_with_Z.shape)
-    return data.join(z_data)
-
-#def addZToPrediction(data_point: Series, model):
-def getZVector(data_point: np.ndarray, model):
+def addZToPoint(model, data_point: np.ndarray):
     encoded = model.encoder(data_point)
     reconstruction = model.decoder(encoded)
-
     Z_features = getZVector(data_point, reconstruction, encoded)
-
-    #Z_features_tensor = tf.convert_to_tensor(Z_features, dtype=tf.float32)
-    #data_point = tf.convert_to_tensor(data_point, dtype=tf.float32)
-
-    #data_point = tf.concat([data_point, Z_features_tensor], 1)
-
-    return concat(data_point, Z_features)
+    return np.concatenate((data_point[0], Z_features))

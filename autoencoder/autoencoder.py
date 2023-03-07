@@ -19,14 +19,14 @@ class AnomalyDetector(Model):
             layers.Dense(46, activation="sigmoid")])  # zed
 
     def call(self, x):
-        self.encoded = self.encoder(x)
+        encoded = self.encoder(x)
         #print(encoded)
-        decoded = self.decoder(self.encoded)
+        decoded = self.decoder(encoded)
         #print(decoded)
         return decoded
     
-    def pipeline_fit(self, train_data):
-        history = self.fit(train_data, train_data, epochs=200, validation_split=0.2, shuffle=True)
+    def pipeline_fit(self, train_data, epochs):
+        history = self.fit(train_data, train_data, epochs=epochs, validation_split=0.2, shuffle=True)
         reconstructions = self.predict(train_data)
         train_loss = mae(reconstructions, train_data)
         self.threshold = np.mean(train_loss)# + 0 * np.std(train_loss)
