@@ -1,5 +1,4 @@
 from matplotlib import pyplot as plt
-from numpy import ndarray
 from pandas import DataFrame, Series
 from time import time
 from autoencoder.aecExtraFeatures import getZVector
@@ -7,12 +6,14 @@ from turtleIsolationForests.printResults import calc_confusion, calc_f1, print_b
 import numpy as np
 import typing
 
-
-def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame,
-                 autoenc: any, iForest: any, intermediatePrint=False, printHistory=False, epochs=10):
+def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, 
+                 autoenc: any, iForest: any, X_train_denoised: DataFrame = None, intermediatePrint=False, printHistory=False, epochs=200):
     train_labels_np = train_labels.to_numpy()
     test_labels_np = test_labels.to_numpy()
-    X_train_ae = X_train[train_labels_np]  # autoencoder trains only on normal data
+    if X_train_denoised == None:
+        X_train_ae = X_train[train_labels_np] #autoencoder trains only on normal data
+    else:
+        X_train_ae = X_train_denoised[train_labels_np] #or the denoised normal data from the robust autoencoder preprocessor
     history = autoenc.pipeline_fit(X_train_ae, epochs=epochs)
     start_time = time()
     ae_scores, ae_predictions = autoenc.pipeline_predict(X_test, test_labels_np)
@@ -35,16 +36,9 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
         print("auroc: " + str(ae_auroc))
         print("test set prediction time: " + str(ae_time))
         print("")
-
-    start_time = time()
     X_train_forest = DataFrame(addZToData(X_train, autoenc))
-    print("Adding Z to train data", time() - start_time)
-    start_time = time()
-    X_test_forest = DataFrame(addZToData(X_test[ae_predictions], autoenc))
-    print("Adding Z to test data", time() - start_time)
-
     iForest.fit(X_train_forest, train_labels)
-
+    X_test_forest = DataFrame(addZToData(X_test[ae_predictions], autoenc))
     test_labels_forest_np = test_labels_np[ae_predictions]
     start_time = time()
     if_scores, if_predictions = iForest.predict(X_test_forest, test_labels_forest_np)
@@ -70,16 +64,14 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
     print("Stage 2 prediction time: " + str(if_time))
 
 
-def addZToData(data: DataFrame, model) -> ndarray:
+def addZToData(data: DataFrame, model) -> np.ndarray:
     data = data.to_numpy()
-
     encoded = model.encoder(data)
     decoded = model.decoder(encoded)
 
     data_with_Z = []
-
     for i in range(len(data)):
-        data_with_Z.append(addZToPoint(data[i:i + 1],  encoded[i:i+1], decoded[i:i+1]))
+        data_with_Z.append(addZToPoint(data[i:i+1],  encoded[i:i+1], decoded[i:i+1]))
 
     data_with_Z_np = np.stack(data_with_Z)
     return data_with_Z_np
