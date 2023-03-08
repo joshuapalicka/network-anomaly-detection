@@ -19,7 +19,7 @@ def getZVector(orig_sample, reconstr_sample, encoded_sample):
     zVector = []
     #print("Encoded")
     #print(encoded_sample)
-    for i in range(len(encoded_sample)):
+    for i in range(len(encoded_sample[0])):
         zVector.append(float(encoded_sample[0][i]))
     #zVector = [float(item) for item in encoded_sample]
     zVector.append(float(get_Zed(orig_sample, reconstr_sample)))
