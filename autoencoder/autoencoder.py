@@ -29,11 +29,11 @@ class AnomalyDetector(Model):
         history = self.fit(train_data, train_data, epochs=epochs, validation_split=0.2, shuffle=True)
         reconstructions = self.predict(train_data)
         train_loss = mae(reconstructions, train_data)
-        self.threshold = np.mean(train_loss)# + 0 * np.std(train_loss)
         return history
 
-    def pipeline_predict(self, test_data, test_labels):
+    def pipeline_predict(self, test_data, test_labels, contamination):
         reconstructions = self.predict(test_data)
         test_loss = mae(test_data, reconstructions) # 1 = anomaly (same as data)
-        predictions = less(self.threshold, test_loss) # if threshold < loss, then we return a 1, as it's an anomaly, else return 0
+        threshold = np.percentile(test_loss, 100 * (1 - contamination))
+        predictions = less(threshold, test_loss) # if threshold < loss, then we return a 1, as it's an anomaly, else return 0
         return test_loss.numpy(), predictions.numpy()

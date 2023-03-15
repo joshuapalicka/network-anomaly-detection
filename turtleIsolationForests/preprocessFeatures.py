@@ -26,6 +26,14 @@ def minmax_preprocess_features(train_dataframe: pd.DataFrame, test_dataframe: pd
 
     return X_train, X_test, train_labels, test_labels
 
+def minmax_preprocess_denoised_features(denoised_train_dataframe: pd.DataFrame) -> (pd.DataFrame):
+    scaler = MinMaxScaler()
+    return scaler.fit_transform(denoised_train_dataframe)
+
+def minmax_preprocess_z_features(z_feature_cols: pd.DataFrame):
+    scaler = MinMaxScaler()
+    scaler.fit_predict(z_feature_cols)
+
 def remove_class_columns(dataframe: pd.DataFrame) -> None:
     for column in dataframe.columns:
         if (column[0:5] == 'class'):
