@@ -32,7 +32,7 @@ def minmax_preprocess_denoised_features(denoised_train_dataframe: pd.DataFrame) 
 
 def minmax_preprocess_z_features(z_feature_cols: pd.DataFrame):
     scaler = MinMaxScaler()
-    scaler.fit_predict(z_feature_cols)
+    return scaler.fit_transform(z_feature_cols)
 
 def remove_class_columns(dataframe: pd.DataFrame) -> None:
     for column in dataframe.columns:

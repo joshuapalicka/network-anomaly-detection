@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 from pandas import DataFrame, Series
 from time import time
-from autoencoder.aecExtraFeatures import getZVector
+from autoencoder.aecExtraFeatures import get_Zcs, get_Zed
 from turtleIsolationForests.printResults import calc_confusion, calc_f1, print_by_result, get_auroc_value
 from turtleIsolationForests.preprocessFeatures import minmax_preprocess_z_features
 import numpy as np
@@ -55,19 +55,30 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
     print("Stage 2 prediction time: " + str(if_time))
 
 
-def addZToData(data: DataFrame, model) -> np.ndarray:
-    data = data.to_numpy()
-    encoded = model.encoder(data)
-    decoded = model.decoder(encoded)
+def addZToData(data: DataFrame, model) -> DataFrame:
+    encoded = model.encoder(data.to_numpy())
+    decoded = model.decoder(encoded).numpy()
+    encoded_np = encoded.numpy()
 
-    data_with_Z = []
-    for i in range(len(data)):
-        data_with_Z.append(addZToPoint(data[i:i+1], encoded[i:i+1], decoded[i:i+1]))
+    data_col_count = data.shape[1]
+    encoded_col_count = data.shape[1]
 
-    data_with_Z_np = np.stack(data_with_Z)
-    return data_with_Z_np
+    z_col_names = ["z"+str(i) for i in range(encoded_np.shape[1])]
+    data = data.join(DataFrame(encoded_np, index=data.index, columns=z_col_names))
+    decoded_df = DataFrame(decoded, index=data.index)
 
+    def makeZedCol(row):
+        orig_sample = row[:data_col_count].to_numpy()
+        reconstr_sample = decoded_df.loc[row.name].to_numpy()
+        dot= get_Zed(orig_sample, reconstr_sample)
+        return dot
+    
+    def makeZcsCol(row):
+        orig_sample = row[:data_col_count].to_numpy()
+        reconstr_sample = decoded_df.loc[row.name].to_numpy()
+        return get_Zcs(orig_sample, reconstr_sample)
 
-def addZToPoint(data_point: np.ndarray, encoded_data_point, decoded_data_point):
-    Z_features = getZVector(data_point, decoded_data_point, encoded_data_point)
-    return np.concatenate((data_point[0], Z_features))
+    data['zed'] = data.apply(makeZedCol, axis=1)
+    data['zcs'] = data.apply(makeZcsCol, axis=1)
+
+    return data
