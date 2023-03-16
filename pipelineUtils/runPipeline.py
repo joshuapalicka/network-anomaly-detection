@@ -25,10 +25,10 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
         print("test set prediction time: " + str(ae_time))
         print("")
     pre_Z_cols = X_train.shape[1]
-    X_train_forest = DataFrame(addZToData(X_train, autoenc))
-    minmax_preprocess_z_features(X_train_forest.iloc[:,pre_Z_cols:])
-    X_test_forest = DataFrame(addZToData(X_test[ae_predictions], autoenc))
-    minmax_preprocess_z_features(X_test_forest.iloc[:,pre_Z_cols:])
+    X_train_forest = addZToData(X_train, autoenc)
+    X_train_forest.iloc[:,pre_Z_cols:] = minmax_preprocess_z_features(X_train_forest.iloc[:,pre_Z_cols:])
+    X_test_forest = addZToData(X_test[ae_predictions], autoenc)
+    X_test_forest.iloc[:,pre_Z_cols:] = minmax_preprocess_z_features(X_test_forest.iloc[:,pre_Z_cols:])
     iForest.fit(X_train_forest, train_labels)
     test_labels_forest_np = test_labels_np[ae_predictions]
     start_time = time()
