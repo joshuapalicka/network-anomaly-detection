@@ -13,7 +13,7 @@ def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame,
     test_labels_np = test_labels.to_numpy()
     history = autoenc.pipeline_fit(X_train_ae, epochs=epochs)
     start_time = time()
-    ae_scores, ae_predictions = autoenc.pipeline_predict(X_test, test_labels_np, contamination)
+    ae_scores, ae_predictions = autoenc.pipeline_predict(X_test, contamination)
     ae_time = time() - start_time
     ae_TA, ae_FA, ae_FN, ae_TN = calc_confusion(ae_predictions, test_labels_np)
     if intermediatePrint:
