@@ -3,7 +3,6 @@ from turtleIsolationForests.extendedIsolationForest import rng
 import math
 import numpy as np
 import pandas as pd
-import random
 import typing
 
 def euclidean_distance_sq(point1: np.ndarray, point2: np.ndarray) -> np.float64:

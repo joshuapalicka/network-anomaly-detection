@@ -4,7 +4,6 @@ import numpy as np
 from numpy.random import default_rng
 from numba import prange, jit, float64, void
 import pandas as pd
-import random
 import typing
 
 rng = default_rng()
