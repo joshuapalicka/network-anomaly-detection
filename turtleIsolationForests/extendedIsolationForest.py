@@ -2,7 +2,6 @@ from turtleIsolationForests.isolationForest import IsolationForest, IsolationTre
 import numpy as np
 from numpy.random import default_rng
 import pandas as pd
-import random
 import typing
 
 rng = default_rng()

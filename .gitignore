@@ -6,6 +6,7 @@ local*/
 *.pyc
 
 *.jpg
+*.png
 
 *.txt
 *.xls
@@ -13,3 +14,4 @@ local*/
 *.csv
 
 *_scalers.ipynb
+*_local.ipynb

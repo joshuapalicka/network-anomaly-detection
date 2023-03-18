@@ -4,7 +4,6 @@ import numpy as np
 from numpy.random import default_rng
 from numba import prange, jit, float64, void
 import pandas as pd
-import random
 import typing
 
 rng = default_rng()
@@ -112,8 +111,8 @@ class IsolationForest:
     def _calculate_anomaly_score_threshold(self, train_data: pd.DataFrame, train_labels: pd.DataFrame) -> float:
         self.train_scores = self._score(train_data)
         if self.contamination == 'auto':
-            ordered_indexes = np.argsort(self.train_scores)
-            threshold = self.train_scores[optimal_threshold_index(self.train_scores, train_labels, ordered_indexes)]   
+            ordered_score_indexes = np.argsort(self.train_scores)
+            threshold = self.train_scores[optimal_threshold_index(train_labels, ordered_score_indexes)]   
         else:
             percentile_contamination = 100 * self._adapt_contamination(train_data)
             threshold = np.percentile(self.train_scores, 100 - percentile_contamination)
