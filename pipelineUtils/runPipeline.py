@@ -8,7 +8,7 @@ import numpy as np
 import typing
 
 def run_pipeline(X_train: DataFrame, X_test: DataFrame, train_labels: DataFrame, test_labels: DataFrame, contamination: float,
-                 autoenc: any, iForest: any, X_train_ae: np.ndarray, intermediatePrint=False, epochs=600):
+                 autoenc: any, iForest: any, X_train_ae: np.ndarray, intermediatePrint=False, epochs=1200):
     train_labels_np = train_labels.to_numpy()
     test_labels_np = test_labels.to_numpy()
     history = autoenc.pipeline_fit(X_train_ae, epochs=epochs)

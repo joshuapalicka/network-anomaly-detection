@@ -12,6 +12,7 @@ local*/
 *.xls
 *.xlsx
 *.csv
+*.zip
 
 *_scalers.ipynb
 *_local.ipynb
