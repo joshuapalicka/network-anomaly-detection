@@ -12,7 +12,6 @@
 
 
 ## Introduction
-
 The world of technology has allowed us to be more connected but it also makes us more vulnerable to cyber threats, making advanced threat detection more important than ever. We build on recent work by Carrera et al [1], further testing their two-phase anomaly detection process. This paper proposes that a model that predicts quickly can be used to reduce the incoming data load for a second, slower, more accurate model, thereby achieving faster and more accurate predictions than either model alone. To improve the model pipeline, we introduce new data augmentations and test many combinations. We use autoencoder variants for the first phase and isolation forest variants for the second. We consider a 2-phase pipeline to have outperformed its component models if the pipeline predicts faster than the phase 2 model without significant loss of score and scores higher than the phase 1 model without significant loss of prediction speed. Our results confirm that the 2-phase prediction pipeline, given the right conditions, outperforms its components under this guideline.
 
 ## Dataset
@@ -20,6 +19,10 @@ We chose the NSL_KDD dataset as it is one of the datasets used in [1], and is we
 
 ## Models
 We used autoencoder variants for the first phase and isolation forest variants for the second. The isolation forest variants we used are Isolation Forest, first defined in [3], which is used in [1], Extended Isolation Forest (EIF) [4], SCiForest (SCiF) [5], and FBiF [6].
+
+## Running the Models
+1. Install extra packages with `pip install requirements.txt`
+2. Run either `Combined_Robust_Pipeline.ipynb` or `Combined_Pipeline.ipynb`, depending on if you'd like to use the robust autoencoder to preprocess the dataset or not. Results will print in the corresponding notebook file once complete.
 
 ## Conclusion
 Our study investigated the pipelining of network traffic anomaly detection models to improve speed and accuracy over their components. We first preprocessed the normal data points in the NSL-KDD dataset using a robust autoencoder to reduce noise and thus improve data quality. Subsequently, we implement a 2-phase approach by combining an autoencoder with an isolation forest in a pipeline. This methodology leads to significant time savings compared to using an isolation forest alone, but still has room to further improve the overall F1 score as compared to the phase 1 autoencoder. The potential for such improvement is shown to potentially lie in underlying qualities of the autoencoder that are not yet well examined.
