@@ -21,7 +21,7 @@ We chose the NSL_KDD dataset as it is one of the datasets used in [1], and is we
 We used autoencoder variants for the first phase and isolation forest variants for the second. The isolation forest variants we used are Isolation Forest, first defined in [3], which is used in [1], Extended Isolation Forest (EIF) [4], SCiForest (SCiF) [5], and FBiF [6].
 
 ## Running the Models
-1. Install extra packages with `pip install requirements.txt`
+1. Install packages with `pip install requirements.txt`
 2. Run either `Combined_Robust_Pipeline.ipynb` or `Combined_Pipeline.ipynb`, depending on if you'd like to use the robust autoencoder to preprocess the dataset or not. Results will print in the corresponding notebook file once complete.
 
 ## Conclusion
