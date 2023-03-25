@@ -2,6 +2,7 @@ data/
 ServerMachineDataset/
 SU_Data/
 local*/
+.idea/
 
 *.pyc
 
