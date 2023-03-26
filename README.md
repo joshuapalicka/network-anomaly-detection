@@ -24,6 +24,31 @@ We used autoencoder variants for the first phase and isolation forest variants f
 1. Install packages with `pip install requirements.txt`
 2. Run either `Combined_Robust_Pipeline.ipynb` or `Combined_Pipeline.ipynb`, depending on if you'd like to use the robust autoencoder to preprocess the dataset or not. Results will print in the corresponding notebook file once complete.
 
+## Results
+
+#### Prediction speed comparison between each model
+
+| Model                            | Predict Speed (Complete Test Set) |
+|----------------------------------|-----------------------------------|
+| Autoencoder                      | 0.031 seconds                     |
+| Isolation Forest                 | 9.21 seconds                      |
+| Extended Isolation Forest        | 15.8 seconds                      |
+| SCiForest                        | 53.8 seconds                      |
+| Finite Boundary Isolation Forest | 59.3 seconds                      |
+
+<br>
+
+#### Scores comparison between individual models (first 2 rows), along with pipeline tests (last 4 rows)
+
+| Model Type             | Precision | Recall | F1    |
+|------------------------|-----------|--------|-------|
+| Autoencoder            | 0.46      | 0.51   | 0.49  |
+| Isolation Forest       | 0.907     | 0.746  | 0.818 |
+| AE -> Isolation Forest | 0.96      | 0.56   | 0.71  |
+| AE -> Extended IF      | 0.83      | 0.36   | 0.50  |
+| AE -> SCiForest        | 0.76      | 0.46   | 0.57  |
+| AE -> FBIF             | 0.58      | 0.44   | 0.50  |
+
 ## Conclusion
 Our study investigated the pipelining of network traffic anomaly detection models to improve speed and accuracy over their components. We first preprocessed the normal data points in the NSL-KDD dataset using a robust autoencoder to reduce noise and thus improve data quality. Subsequently, we implement a 2-phase approach by combining an autoencoder with an isolation forest in a pipeline. This methodology leads to significant time savings compared to using an isolation forest alone, but still has room to further improve the overall F1 score as compared to the phase 1 autoencoder. The potential for such improvement is shown to potentially lie in underlying qualities of the autoencoder that are not yet well examined.
 
