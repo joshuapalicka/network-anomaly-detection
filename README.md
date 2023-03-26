@@ -18,7 +18,7 @@ The world of technology has allowed us to be more connected but it also makes us
 We chose the NSL_KDD dataset as it is one of the datasets used in [1], and is well-documented. It contains packet data for network analysis, and is meant as a train and test dataset for use in anomaly detection. Each data point is classified as either 0 (normal) or 1 (anomalous), which allows for binary classification on whether the data point is an anomaly or not.
 
 ## Models
-We used autoencoder variants for the first phase and isolation forest variants for the second. The isolation forest variants we used are Isolation Forest, first defined in [3], which is used in [1], Extended Isolation Forest (EIF) [4], SCiForest (SCiF) [5], and FBiF [6].
+We used autoencoder variants for the first phase and isolation forest variants for the second. The isolation forest variants we used are Isolation Forest, first defined in [3], which is used in [1], Extended Isolation Forest (EIF) [4], SCiForest (SCiF) [5], and FBiF [6]. The non-anomalous training data was preprocessed with a robust autoencoder [8].
 
 ## Running the Models
 1. Install packages with `pip install requirements.txt`
@@ -28,6 +28,7 @@ We used autoencoder variants for the first phase and isolation forest variants f
 Our study investigated the pipelining of network traffic anomaly detection models to improve speed and accuracy over their components. We first preprocessed the normal data points in the NSL-KDD dataset using a robust autoencoder to reduce noise and thus improve data quality. Subsequently, we implement a 2-phase approach by combining an autoencoder with an isolation forest in a pipeline. This methodology leads to significant time savings compared to using an isolation forest alone, but still has room to further improve the overall F1 score as compared to the phase 1 autoencoder. The potential for such improvement is shown to potentially lie in underlying qualities of the autoencoder that are not yet well examined.
 
 ## References
+References
 [1]: Carrera, Francesco, et al. "Combining unsupervised approaches for near real-time network traffic anomaly detection." Applied Sciences 12.3 (2022): 1759.
 
 [2]: Iglesias, Félix, and Tanja Zseby. "Analysis of network traffic features for anomaly detection." Machine Learning 101 (2015): 59-84.
@@ -38,5 +39,9 @@ Our study investigated the pipelining of network traffic anomaly detection model
 
 [5]: Liu, Fei Tony, Kai Ming Ting, and Zhi-Hua Zhou. "On detecting clustered anomalies using SCiForest." Machine Learning and Knowledge Discovery in Databases: European Conference, ECML PKDD 2010, Barcelona, Spain, September 20-24, 2010, Proceedings, Part II 21. Springer Berlin Heidelberg, 2010.
 
-[6]: J. Choudhury and C. Shi, "Enhanced Performance of Finitie [sic] Boundary Isolation Forest (FBIF) for Datasets with Standard Distribution Properties," 2022 International Conference on Electrical, Computer and Energy Technologies (ICECET), Prague, Czech Republic, 2022, pp. 1-5, doi: 10.1109/ICECET55527.2022.9873022.
+[6]: Choudhury, Jayanta, et al. "Hypersphere for Branching Node for the Family of Isolation Forest Algorithms." 2021 IEEE International Conference on Smart Computing (SMARTCOMP). IEEE, 2021.
+
+[7]: J. Choudhury and C. Shi, "Enhanced Performance of Finitie [sic] Boundary Isolation Forest (FBIF) for Datasets with Standard Distribution Properties," 2022 International Conference on Electrical, Computer and Energy Technologies (ICECET), Prague, Czech Republic, 2022, pp. 1-5, doi: 10.1109/ICECET55527.2022.9873022.
+
+[8]: Zong, Bo, et al. "Deep autoencoding gaussian mixture model for unsupervised anomaly detection." International conference on learning representations. 2018.
 
